@@ -166,3 +166,52 @@ and the Hierarchical Reasoning Model (HRM):
 ```
 
 This code is based on the Hierarchical Reasoning Model [code](https://github.com/sapientinc/HRM) and the Hierarchical Reasoning Model Analysis [code](https://github.com/arcprize/hierarchical-reasoning-model-analysis).
+
+## SETUP
+
+- **Orientation**  
+  - Ground yourself in TRM’s architecture and training loop; `config/arch/trm.yaml:15` defines the 512-dim, 8-head transformer core, while recursion depth lives in `config/arch/trm.yaml:9` and `config/arch/trm.yaml:10`.  
+  - Skim `config/cfg_pretrain.yaml:18` for the default global batch, EMA toggle, and optimizer settings.  
+  - Review the Distributed Data-Parallel mental model (data sharding, replicated weights, all-reduce) and map each `torchrun` flag to its role.  
+  - Confirm that `data/` contains ARC-style samples or plan how Stoney/Nakoda tasks will match the JSON schema used in `dataset/build_*`.
+
+- **Environment Setup**  
+  - Build a reproducible Python 3.10 + CUDA 12.6 stack; start from the README install commands but pin stable torch wheels if you are not on nightly.  
+  - Create and document a dedicated virtualenv or conda environment.  
+  - Validate the GPU stack with quick probes such as `python -c "import torch; print(torch.cuda.get_device_name())"`.  
+  - Draft a checklist covering drivers, CUDA/NCCL, and `wandb login` so others can replicate the configuration.
+
+- **Data Curation**  
+  - Adapt dataset builders (example: `dataset/build_arc_dataset.py`) to ingest Stoney or Nakoda language pairs while preserving the expected schema.  
+  - Produce a toy corpus (≈50 samples) under `data/stoney-pilot` to ensure preprocessing works end to end.  
+  - Encourage logging dataset statistics (token counts, label distribution) for later scaling discussions.
+
+- **Single-GPU Training**  
+  - Start with `python pretrain.py ...` on one GPU; reduce `global_batch_size` in `config/cfg_pretrain.yaml:18` if memory is tight.  
+  - Run a short Sudoku experiment to validate the pipeline before larger datasets.  
+  - Track GPU memory with `nvidia-smi dmon` and log metrics to Weights & Biases for baseline comparisons.
+
+- **Monitoring & Checkpointing**  
+  - Use `checkpoint_every_eval` (`config/cfg_pretrain.yaml:22`) to ensure recoverability.  
+  - Demonstrate run interruption and resume flows so longer jobs can survive preemption.  
+  - Identify signals (loss curves, gradient norms) that show readiness to scale beyond a single GPU.
+
+- **Scaling Up (Single Node)**  
+  - Transition to `torchrun --nproc-per-node 4 --nnodes 1` when multiple GPUs are available.  
+  - Explain how `WORLD_SIZE` impacts per-GPU batch: `per_gpu_batch = global_batch_size / WORLD_SIZE`.  
+  - Practice diagnosing NCCL setup issues and interpreting torchrun logs.
+
+- **Multi-Node Expansion**  
+  - Teach rendezvous concepts: master node (`--node-rank 0`) hosts the rendezvous endpoint and workers join with matching `--rdzv-id`.  
+  - Cover networking prerequisites (open port 29500 or chosen rendezvous port, synced clocks, optional shared storage).  
+  - Have participants map `RANK`, `LOCAL_RANK`, and `WORLD_SIZE` for a two-node example before launching real jobs.
+
+- **Resource Planning**  
+  - Relate architectural knobs to memory: doubling `hidden_size` (~3× VRAM) and `L_layers` (~2×).  
+  - Build a worksheet estimating GPU needs using the 4×H100 baseline and alternatives like L40S.  
+  - Promote cost controls: short dry runs, logging to wandb, and tuned checkpoint cadence before lengthy training.
+
+- **Next Steps**  
+  - Capture a real Stoney/Nakoda pilot run and analyze outputs for dataset quality.  
+  - Script a reusable torchrun launcher that parameterizes `nnodes`, `nproc-per-node`, and `run_name`.  
+  - Draft public-facing documentation that blends this setup guide with cultural context for the language revitalization effort.

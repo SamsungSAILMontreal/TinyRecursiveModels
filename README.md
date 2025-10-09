@@ -167,51 +167,147 @@ and the Hierarchical Reasoning Model (HRM):
 
 This code is based on the Hierarchical Reasoning Model [code](https://github.com/sapientinc/HRM) and the Hierarchical Reasoning Model Analysis [code](https://github.com/arcprize/hierarchical-reasoning-model-analysis).
 
-## SETUP
+## TinyRecursiveInference: Publishing and Inference Pipeline
 
-- **Orientation**  
-  - Ground yourself in TRM’s architecture and training loop; `config/arch/trm.yaml:15` defines the 512-dim, 8-head transformer core, while recursion depth lives in `config/arch/trm.yaml:9` and `config/arch/trm.yaml:10`.  
-  - Skim `config/cfg_pretrain.yaml:18` for the default global batch, EMA toggle, and optimizer settings.  
-  - Review the Distributed Data-Parallel mental model (data sharding, replicated weights, all-reduce) and map each `torchrun` flag to its role.  
-  - Confirm that `data/` contains ARC-style samples or plan how Stoney/Nakoda tasks will match the JSON schema used in `dataset/build_*`.
+This repository includes **TinyRecursiveInference**, a complete end-to-end system for publishing datasets and models, plus running inference on trained TRM checkpoints.
 
-- **Environment Setup**  
-  - Build a reproducible Python 3.10 + CUDA 12.6 stack; start from the README install commands but pin stable torch wheels if you are not on nightly.  
-  - Create and document a dedicated virtualenv or conda environment.  
-  - Validate the GPU stack with quick probes such as `python -c "import torch; print(torch.cuda.get_device_name())"`.  
-  - Draft a checklist covering drivers, CUDA/NCCL, and `wandb login` so others can replicate the configuration.
+### Features
 
-- **Data Curation**  
-  - Adapt dataset builders (example: `dataset/build_arc_dataset.py`) to ingest Stoney or Nakoda language pairs while preserving the expected schema.  
-  - Produce a toy corpus (≈50 samples) under `data/stoney-pilot` to ensure preprocessing works end to end.  
-  - Encourage logging dataset statistics (token counts, label distribution) for later scaling discussions.
+- **Dataset Publishing**: Automated upload of prepared datasets (ARC, Sudoku, Maze) to Hugging Face Hub
+- **Training Telemetry**: Enhanced Weights & Biases logging with checkpoint artifact tracking
+- **Model Publishing**: One-command upload of trained checkpoints and model cards to Hugging Face Model Hub
+- **Interactive Inference**: Gradio application for visual puzzle solving with reasoning state visualization
 
-- **Single-GPU Training**  
-  - Start with `python pretrain.py ...` on one GPU; reduce `global_batch_size` in `config/cfg_pretrain.yaml:18` if memory is tight.  
-  - Run a short Sudoku experiment to validate the pipeline before larger datasets.  
-  - Track GPU memory with `nvidia-smi dmon` and log metrics to Weights & Biases for baseline comparisons.
+### Quick Start
 
-- **Monitoring & Checkpointing**  
-  - Use `checkpoint_every_eval` (`config/cfg_pretrain.yaml:22`) to ensure recoverability.  
-  - Demonstrate run interruption and resume flows so longer jobs can survive preemption.  
-  - Identify signals (loss curves, gradient norms) that show readiness to scale beyond a single GPU.
+**1. Publish a Dataset to Hugging Face Hub**
 
-- **Scaling Up (Single Node)**  
-  - Transition to `torchrun --nproc-per-node 4 --nnodes 1` when multiple GPUs are available.  
-  - Explain how `WORLD_SIZE` impacts per-GPU batch: `per_gpu_batch = global_batch_size / WORLD_SIZE`.  
-  - Practice diagnosing NCCL setup issues and interpreting torchrun logs.
+```bash
+python -c "
+from tiny_recursive_inference import TinyRecursiveInferencePipeline
+from tiny_recursive_inference.config import TinyRecursiveInferenceConfig, DatasetPublishConfig
 
-- **Multi-Node Expansion**  
-  - Teach rendezvous concepts: master node (`--node-rank 0`) hosts the rendezvous endpoint and workers join with matching `--rdzv-id`.  
-  - Cover networking prerequisites (open port 29500 or chosen rendezvous port, synced clocks, optional shared storage).  
-  - Have participants map `RANK`, `LOCAL_RANK`, and `WORLD_SIZE` for a two-node example before launching real jobs.
+config = TinyRecursiveInferenceConfig(
+    dataset=DatasetPublishConfig(
+        local_path='data/arc1concept-aug-1000',
+        repo_id='your-username/arc-dataset',
+        private=True
+    )
+)
 
-- **Resource Planning**  
-  - Relate architectural knobs to memory: doubling `hidden_size` (~3× VRAM) and `L_layers` (~2×).  
-  - Build a worksheet estimating GPU needs using the 4×H100 baseline and alternatives like L40S.  
-  - Promote cost controls: short dry runs, logging to wandb, and tuned checkpoint cadence before lengthy training.
+pipeline = TinyRecursiveInferencePipeline(config)
+repo_id = pipeline.publish_dataset()
+print(f'Published to: {repo_id}')
+"
+```
 
-- **Next Steps**  
-  - Capture a real Stoney/Nakoda pilot run and analyze outputs for dataset quality.  
-  - Script a reusable torchrun launcher that parameterizes `nnodes`, `nproc-per-node`, and `run_name`.  
-  - Draft public-facing documentation that blends this setup guide with cultural context for the language revitalization effort.
+**2. Train with Enhanced W&B Telemetry**
+
+```bash
+export USE_TRI_CALLBACKS=true
+export WANDB_PROJECT=tiny-recursive-models
+
+torchrun --nproc-per-node 4 pretrain.py \
+  arch=trm \
+  data_paths="[data/arc1concept-aug-1000]" \
+  arch.L_layers=2 arch.H_cycles=3 arch.L_cycles=4 \
+  +run_name="arc1-enhanced" \
+  ema=True
+```
+
+**3. Publish Trained Model to Hugging Face Hub**
+
+```bash
+python scripts/publish_checkpoint.py \
+  --checkpoint-dir checkpoints/Arc1concept-aug-1000-ACT-torch/arc1-enhanced \
+  --repo-id your-username/arc-trm-model \
+  --private
+```
+
+**4. Launch Interactive Inference App**
+
+```bash
+# From local checkpoint
+python -m tiny_recursive_inference.gradio_app \
+  checkpoints/Arc1concept-aug-1000-ACT-torch/arc1-enhanced
+
+# From Hugging Face Hub
+python -m tiny_recursive_inference.gradio_app \
+  your-username/arc-trm-model
+```
+
+**5. Run Full Pipeline**
+
+```bash
+# Edit config/inference_config.yaml first with your settings
+python scripts/run_full_pipeline.py \
+  --config config/inference_config.yaml
+```
+
+### Configuration
+
+Create `config/inference_config.yaml`:
+
+```yaml
+project_root: "."
+
+dataset:
+  local_path: "data/arc1concept-aug-1000"
+  repo_id: "your-username/arc-dataset"
+  private: true
+
+training:
+  use_torchrun: true
+  nproc_per_node: 4
+  checkpoint_dir: "checkpoints/arc1-experiment"
+  overrides:
+    - "arch=trm"
+    - "data_paths=[data/arc1concept-aug-1000]"
+    - "arch.L_layers=2"
+    - "arch.H_cycles=3"
+    - "arch.L_cycles=4"
+    - "+run_name=arc1-experiment"
+    - "ema=True"
+
+model:
+  checkpoint_dir: "checkpoints/arc1-experiment"
+  repo_id: "your-username/arc-trm-model"
+  private: true
+```
+
+### Environment Variables
+
+```bash
+# Hugging Face (for publishing)
+export HUGGINGFACE_TOKEN="your_hf_token"
+
+# Weights & Biases (for training telemetry)
+export WANDB_API_KEY="your_wandb_key"
+export WANDB_PROJECT="tiny-recursive-models"
+
+# TinyRecursiveInference
+export USE_TRI_CALLBACKS=true  # Enable enhanced W&B logging
+```
+
+### Installation
+
+```bash
+# Core training dependencies
+pip install -r requirements.txt
+
+# TinyRecursiveInference extras
+pip install huggingface_hub gradio matplotlib Pillow
+```
+
+### Documentation
+
+- See [ClaudePlan.md](ClaudePlan.md) for complete technical specifications and implementation details
+- See [AGENTS.md](AGENTS.md) for multi-node distributed training setup
+
+## RecursiveInference
+
+- Train a candidate model and log its evaluation metrics (e.g., W&B charts plus ARC evaluators) during or after the run.
+- Load the resulting `step_*` checkpoint with `tiny_recursive_inference.model_loader.load_trm_checkpoint` or by passing `load_checkpoint=` into `pretrain.py`, then score it on the same validation suites used by the current best model.
+- Promote the new checkpoint only if it outperforms the incumbent; otherwise retain the previous weights and skip publishing.
+- Start the next training pass from the promoted checkpoint (`load_checkpoint=<best_step>`) to continue finetuning and repeat until successive runs no longer improve.
+- Once improvements plateau, publish the final checkpoint and update inference endpoints (Gradio app, Hugging Face Space, etc.) so downstream users pick up the upgraded model automatically.

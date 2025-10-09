@@ -1,0 +1,12 @@
+{
+    "pad_id": 0,
+    "ignore_label_id": -1,
+    "blank_identifier_id": 0,
+    "vocab_size": 20,
+    "seq_len": 10,
+    "num_puzzle_identifiers": 1,
+    "total_groups": 1,
+    "mean_puzzle_examples": 1.0,
+    "total_puzzles": 1,
+    "sets": ["train"]
+}

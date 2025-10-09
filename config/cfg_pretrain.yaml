@@ -40,3 +40,9 @@ min_eval_interval: 0 # when to start the eval
 ema: False # use Exponential-Moving-Average
 ema_rate: 0.999 # EMA-rate
 freeze_weights: False # If True, freeze weights and only learn the embeddings
+
+# Supervision Curriculum
+supervision_curriculum: False
+curriculum_min_depth: 2
+curriculum_max_depth: 16
+curriculum_warmup_epochs: 1

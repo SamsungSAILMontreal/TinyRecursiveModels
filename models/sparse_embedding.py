@@ -26,6 +26,9 @@ class CastedSparseEmbedding(nn.Module):
         self.local_ids = nn.Buffer(torch.zeros(batch_size, dtype=torch.int32), persistent=False)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        if inputs.ndim > 1:
+            inputs = inputs.squeeze(-1)
+
         if not self.training:
             # Test mode, no gradient
             return self.weights[inputs].to(self.cast_to)

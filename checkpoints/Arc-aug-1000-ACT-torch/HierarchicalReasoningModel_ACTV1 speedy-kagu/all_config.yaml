@@ -1,0 +1,52 @@
+arch:
+  H_cycles: 2
+  H_layers: 4
+  L_cycles: 2
+  L_layers: 4
+  adaptive_depth_controller: true
+  expansion: 4
+  forward_dtype: bfloat16
+  halt_exploration_prob: 0.1
+  halt_max_steps: 16
+  hidden_size: 512
+  loss:
+    loss_type: stablemax_cross_entropy
+    name: losses@ACTLossHead
+  mlp_t: false
+  name: recursive_reasoning.hrm@HierarchicalReasoningModel_ACTV1
+  num_heads: 8
+  pos_encodings: rope
+  puzzle_emb_ndim: 512
+  residual_connections: true
+beta1: 0.9
+beta2: 0.95
+checkpoint_every_eval: true
+checkpoint_path: checkpoints/Arc-aug-1000-ACT-torch/HierarchicalReasoningModel_ACTV1
+  speedy-kagu
+curriculum_max_depth: 16
+curriculum_min_depth: 2
+curriculum_warmup_epochs: 1
+data_paths:
+- data/arc-aug-1000
+data_paths_test: []
+ema: false
+ema_rate: 0.999
+epochs: 1
+eval_interval: 1
+eval_save_outputs: []
+evaluators:
+- name: arc@ARC
+freeze_weights: false
+global_batch_size: 16
+load_checkpoint: null
+lr: 0.0001
+lr_min_ratio: 1.0
+lr_warmup_steps: 2000
+min_eval_interval: 0
+project_name: Arc-aug-1000-ACT-torch
+puzzle_emb_lr: 0.01
+puzzle_emb_weight_decay: 0.1
+run_name: HierarchicalReasoningModel_ACTV1 speedy-kagu
+seed: 0
+supervision_curriculum: true
+weight_decay: 0.1

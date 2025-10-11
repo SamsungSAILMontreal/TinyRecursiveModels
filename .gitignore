@@ -22,3 +22,6 @@ build/
 .pytest_cache/
 *.orig
 *.npy
+*.json
+wandb/
+checkpoints/

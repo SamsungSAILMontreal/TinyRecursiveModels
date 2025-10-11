@@ -5,7 +5,7 @@ tqdm
 coolname
 pydantic
 argdantic
-wandb
+# wandb
 omegaconf
 hydra-core
 huggingface_hub
@@ -17,4 +17,6 @@ setuptools-scm
 pydantic-core
 huggingface_hub 
 numba
-triton
+# triton
+trackio
+ipdb

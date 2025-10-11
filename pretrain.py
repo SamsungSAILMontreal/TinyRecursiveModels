@@ -5,6 +5,8 @@ import math
 import yaml
 import shutil
 import copy
+import warnings
+from contextlib import nullcontext
 
 import torch
 import torch.distributed as dist
@@ -12,12 +14,39 @@ from torch import nn
 from torch.utils.data import DataLoader
 
 import tqdm
-import wandb
+import trackio as wandb
 import coolname
 import hydra
 import pydantic
 from omegaconf import DictConfig
-from adam_atan2 import AdamATan2
+
+try:
+    from adam_atan2 import AdamATan2 as _AdamATan2
+except (ModuleNotFoundError, ImportError, OSError) as exc:
+    from torch.optim import AdamW as _AdamATan2
+
+    warnings.warn(
+        f"adam_atan2 backend not available ({exc}). Falling back to torch.optim.AdamW; "
+        "consider installing the adam_atan2 C++ extension for best performance.",
+        RuntimeWarning,
+        stacklevel=1,
+    )
+
+AdamATan2 = _AdamATan2
+
+
+def get_default_device() -> torch.device:
+    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def move_batch_to_device(batch: Any, device: torch.device):
+    return {k: v.to(device) for k, v in batch.items()}
+
+
+def device_context(device: torch.device):
+    if device.type == "cuda":
+        return torch.cuda.device(device)
+    return nullcontext()
 
 from puzzle_dataset import PuzzleDataset, PuzzleDatasetConfig, PuzzleDatasetMetadata
 from utils.functions import load_model_class, get_model_source_path
@@ -102,18 +131,25 @@ def create_dataloader(config: PretrainConfig, split: str, rank: int, world_size:
         num_replicas=world_size,
         **kwargs
     ), split=split)
-    dataloader = DataLoader(
-        dataset,
+    device = get_default_device()
+    num_workers = 1 if device.type == "cuda" else 0
+    dataloader_kwargs = dict(
         batch_size=None,
-        num_workers=1,
-        prefetch_factor=8,
-        pin_memory=True,
-        persistent_workers=True
+        num_workers=num_workers,
+        # prefetch_factor=8,
+        pin_memory=device.type == "cuda",
+        # persistent_workers=True
     )
+    if num_workers > 0:
+        dataloader_kwargs.update(prefetch_factor=8, persistent_workers=True)
+
+    dataloader = DataLoader(dataset, **dataloader_kwargs)
     return dataloader, dataset.metadata
 
 
 def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, rank: int, world_size: int):
+    device = get_default_device()
+
     model_cfg = dict(
         **config.arch.__pydantic_extra__,  # type: ignore
         batch_size=config.global_batch_size // world_size,
@@ -127,16 +163,16 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     model_cls = load_model_class(config.arch.name)
     loss_head_cls = load_model_class(config.arch.loss.name)
 
-    with torch.device("cuda"):
-        model: nn.Module = model_cls(model_cfg)
+    with device_context(device):
+        model: nn.Module = model_cls(model_cfg).to(device)
         print(model)
-        model = loss_head_cls(model, **config.arch.loss.__pydantic_extra__)  # type: ignore
+        model = loss_head_cls(model, **config.arch.loss.__pydantic_extra__).to(device)  # type: ignore
         if "DISABLE_COMPILE" not in os.environ:
             model = torch.compile(model)  # type: ignore
 
         # Load checkpoint
         if rank == 0:
-            load_checkpoint(model, config)
+            load_checkpoint(model, config, device=device)
 
         # Broadcast parameters from rank 0
         if world_size > 1:
@@ -241,12 +277,12 @@ def save_train_state(config: PretrainConfig, train_state: TrainState):
     torch.save(train_state.model.state_dict(), os.path.join(config.checkpoint_path, f"step_{train_state.step}"))
 
 
-def load_checkpoint(model: nn.Module, config: PretrainConfig):
+def load_checkpoint(model: nn.Module, config: PretrainConfig, device: torch.device):
     if config.load_checkpoint is not None:
         print(f"Loading checkpoint {config.load_checkpoint}")
 
         # Load state dict
-        state_dict = torch.load(config.load_checkpoint, map_location="cuda")
+        state_dict = torch.load(config.load_checkpoint, map_location=device)
 
         # Resize and reset puzzle emb if needed
         puzzle_emb_name = "_orig_mod.model.inner.puzzle_emb.weights"
@@ -291,12 +327,14 @@ def train_batch(config: PretrainConfig, train_state: TrainState, batch: Any, glo
     if train_state.step > train_state.total_steps:  # At most train_total_steps
         return
 
+    device = next(train_state.model.parameters()).device
+
     # To device
-    batch = {k: v.cuda() for k, v in batch.items()}
+    batch = move_batch_to_device(batch, device)
 
     # Init carry if it is None
     if train_state.carry is None:
-        with torch.device("cuda"):
+        with device_context(device):
             train_state.carry = train_state.model.initial_carry(batch)  # type: ignore
 
     # Forward
@@ -353,6 +391,7 @@ def evaluate(
     cpu_group: Optional[dist.ProcessGroup],
 ):
     reduced_metrics = None
+    device = next(train_state.model.parameters()).device
 
     with torch.inference_mode():
         return_keys = set(config.eval_save_outputs)
@@ -377,8 +416,8 @@ def evaluate(
                 print(f"Processing batch {processed_batches}: {set_name}")
             
             # To device
-            batch = {k: v.cuda() for k, v in batch.items()}
-            with torch.device("cuda"):
+            batch = move_batch_to_device(batch, device)
+            with device_context(device):
                 carry = train_state.model.initial_carry(batch)  # type: ignore
 
             # Forward
@@ -414,7 +453,7 @@ def evaluate(
                     sorted(metrics.keys())
                 )  # Sort keys to guarantee all processes use the same order.
                 metric_values = torch.zeros(
-                    (len(set_ids), len(metrics.values())), dtype=torch.float32, device="cuda"
+                    (len(set_ids), len(metrics.values())), dtype=torch.float32, device=device
                 )
 
             metric_values[set_id] += torch.stack([metrics[k] for k in metric_keys])
@@ -508,7 +547,7 @@ def save_code_and_config(config: PretrainConfig):
         yaml.dump(config.model_dump(), f)
 
     # Log code
-    wandb.run.log_code(config.checkpoint_path)
+    wandb.log({"code": config.checkpoint_path})
 
 
 def load_synced_config(hydra_config: DictConfig, rank: int, world_size: int) -> PretrainConfig:
@@ -541,12 +580,20 @@ def launch(hydra_config: DictConfig):
     # Initialize distributed training if in distributed environment (e.g. torchrun)
     if "LOCAL_RANK" in os.environ:
         # Initialize distributed, default device and dtype
-        dist.init_process_group(backend="nccl")
+        dist_backend = "nccl" if torch.cuda.is_available() else "gloo"
+        dist.init_process_group(backend=dist_backend)
 
         RANK = dist.get_rank()
         WORLD_SIZE = dist.get_world_size()
 
-        torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+        if torch.cuda.is_available():
+            torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+        else:
+            warnings.warn(
+                "Running distributed training without CUDA; defaulting to CPU execution.",
+                RuntimeWarning,
+                stacklevel=1,
+            )
         
         # CPU GLOO process group
         CPU_PROCESS_GROUP = dist.new_group(backend="gloo")
@@ -587,9 +634,23 @@ def launch(hydra_config: DictConfig):
     ema_helper = None
     if RANK == 0:
         progress_bar = tqdm.tqdm(total=train_state.total_steps)
-        wandb.init(project=config.project_name, name=config.run_name, config=config.model_dump(), settings=wandb.Settings(_disable_stats=True))  # type: ignore
-        wandb.log({"num_params": sum(x.numel() for x in train_state.model.parameters())}, step=0)
-        save_code_and_config(config)
+        try:
+            wandb.init(  # type: ignore
+                project=config.project_name,
+                name=config.run_name,
+                config=config.model_dump(),
+            )
+        except Exception as exc:
+            warnings.warn(
+                f"wandb init failed ({exc}); continuing with wandb disabled.",
+                RuntimeWarning,
+                stacklevel=1,
+            )
+            wandb.init()  # type: ignore
+
+        if wandb.run is not None:
+            wandb.log({"num_params": sum(x.numel() for x in train_state.model.parameters())}, step=0)
+            save_code_and_config(config)
     if config.ema:
         print('Setup EMA')
         ema_helper = EMAHelper(mu=config.ema_rate)

@@ -21,3 +21,4 @@ build/
 .mypy_cache/
 .pytest_cache/
 *.orig
+*.npy

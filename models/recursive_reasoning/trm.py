@@ -191,12 +191,12 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         
     def reset_carry(self, reset_flag: torch.Tensor, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry):
         device = "cuda:0"
-        reset_flag_on_device = reset_flag.to(device)
+        reset_flag = reset_flag.to(device)
         h_init = self.H_init.to(device)
         l_init = self.L_init.to(device)
         return TinyRecursiveReasoningModel_ACTV1InnerCarry(
-            z_H=torch.where(reset_flag.view(-1, 1, 1), self.H_init, carry.z_H),
-            z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
+            z_H=torch.where(reset_flag.view(-1, 1, 1), h_init, carry.z_H),
+            z_L=torch.where(reset_flag.view(-1, 1, 1), l_init, carry.z_L),
         )
 
     def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
@@ -242,7 +242,7 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
 
     def initial_carry(self, batch: Dict[str, torch.Tensor]):
         batch_size = batch["inputs"].shape[0]
-        device = next(self.parameters()).device
+        device = "cuda:0"
         return TinyRecursiveReasoningModel_ACTV1Carry(
             inner_carry=self.inner.empty_carry(batch_size),  # Empty is expected, it will be reseted in first pass as all sequences are halted.
             

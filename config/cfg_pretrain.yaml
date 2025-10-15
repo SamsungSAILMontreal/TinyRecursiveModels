@@ -1,24 +1,24 @@
 # ARC training config
 
 defaults:
-  - arch: trm
+  - arch: trm_mini
   - _self_
 
 hydra:
   output_subdir: null
 
 # Data path
-data_paths: ['data/arc-aug-1000']
+data_paths: ['data/arc_mini_arc2']
 data_paths_test: []
 
 evaluators:
   - name: arc@ARC
 
 # Hyperparams - Training
-global_batch_size: 768
+global_batch_size: 256
 
-epochs: 100000
-eval_interval: 10000
+epochs: 20000
+eval_interval: 2000
 checkpoint_every_eval: True
 
 lr: 1e-4

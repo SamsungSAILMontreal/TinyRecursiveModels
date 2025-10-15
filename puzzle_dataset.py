@@ -113,8 +113,18 @@ class PuzzleDataset(IterableDataset):
         self._iters = 0
 
     def _load_metadata(self, dataset_path) -> PuzzleDatasetMetadata:
-        with open(os.path.join(dataset_path, self.split, "dataset.json"), "r") as f:
-            return PuzzleDatasetMetadata(**json.load(f))
+        metadata_path = os.path.join(dataset_path, self.split, "dataset.json")
+        with open(metadata_path, "r") as f:
+            data = json.load(f)
+    
+        # total_puzzles 필드가 없을 경우, 직접 계산하여 추가
+        if "total_puzzles" not in data:
+            indices_path = os.path.join(dataset_path, self.split, "all__puzzle_indices.npy")
+            puzzle_indices = np.load(indices_path)
+            # 퍼즐 인덱스의 길이는 (총 퍼즐 수 + 1) 입니다.
+            data["total_puzzles"] = len(puzzle_indices) - 1
+            
+        return PuzzleDatasetMetadata(**data)
 
     def _lazy_load_dataset(self):
         if self._data is not None:

@@ -573,11 +573,11 @@ def launch(hydra_config: DictConfig):
         print("NO EVAL DATA FOUND")
         eval_loader = eval_metadata = None
 
-    try:
-        evaluators = create_evaluators(config, eval_metadata)
-    except:
-        print("No evaluator found")
-        evaluators = []
+    # try:
+    evaluators = create_evaluators(config, eval_metadata)
+    # except:
+    #     print("No evaluator found")
+    #     evaluators = []
 
     # Train state
     train_state = init_train_state(config, train_metadata, rank=RANK, world_size=WORLD_SIZE)

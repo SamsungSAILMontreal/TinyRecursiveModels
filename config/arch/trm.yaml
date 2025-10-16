@@ -12,8 +12,8 @@ L_cycles: 6
 H_layers: 0
 L_layers: 2
 
-hidden_size: 128
-num_heads: 2  # min(2, hidden_size // 64)
+hidden_size: 512
+num_heads: 8  # min(2, hidden_size // 64)
 expansion: 4
 
 puzzle_emb_ndim: ${.hidden_size}

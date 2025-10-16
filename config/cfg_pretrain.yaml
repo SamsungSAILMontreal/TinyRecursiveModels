@@ -14,6 +14,19 @@ data_paths_test: []
 evaluators:
   - name: arc@ARC
 
+eval:
+  # 평가할 체크포인트의 경로 (커맨드 라인에서 지정)
+  ckpt_path: null
+
+  # 평가 시 사용할 배치 사이즈
+  batch_size: 128
+
+  # 데이터 로딩에 사용할 워커 수
+  num_workers: 4
+
+  # 평가 결과(.pkl)가 저장될 디렉터리
+  output_dir: ${output_dir}
+  
 # Hyperparams - Training
 global_batch_size: 256
 

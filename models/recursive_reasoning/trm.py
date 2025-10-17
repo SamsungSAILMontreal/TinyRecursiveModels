@@ -1,3 +1,5 @@
+# models/recursive_reasoning/trm.py
+
 from typing import Tuple, List, Dict, Optional
 from dataclasses import dataclass
 import math
@@ -193,7 +195,11 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
             z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
         )
 
-    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    # ====================================================================================
+    # MODIFICATION START: Inner.forward
+    # ====================================================================================
+    # 기존 Tuple[..., Tuple[...]] 형태의 반환 타입 어노테이션을 유지하되, 궤적을 추가 반환합니다.
+    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor], List[torch.Tensor]]:
         seq_info = dict(
             cos_sin=self.rotary_emb() if hasattr(self, "rotary_emb") else None,
         )
@@ -202,25 +208,37 @@ class TinyRecursiveReasoningModel_ACTV1_Inner(nn.Module):
         input_embeddings = self._input_embeddings(batch["inputs"], batch["puzzle_identifiers"])
 
         # Forward iterations
-        it = 0
         z_H, z_L = carry.z_H, carry.z_L
+        
         # H_cycles-1 without grad
         with torch.no_grad():
             for _H_step in range(self.config.H_cycles-1):
                 for _L_step in range(self.config.L_cycles):
                     z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
                 z_H = self.L_level(z_H, z_L, **seq_info)
-        # 1 with grad
+        
+        # 1 with grad - 이 마지막 H-cycle에서 궤적을 추출합니다.
+        
+        # 궤적을 저장할 리스트를 초기화하고, 이 cycle의 시작점 z_L을 추가합니다.
+        trajectory_vectors = [z_L.clone().detach()]
+        
         for _L_step in range(self.config.L_cycles):
             z_L = self.L_level(z_L, z_H + input_embeddings, **seq_info)
+            # 매 L-cycle 마다 업데이트된 z_L을 궤적에 추가합니다.
+            trajectory_vectors.append(z_L.clone().detach())
+            
         z_H = self.L_level(z_H, z_L, **seq_info)
 
         # LM Outputs
         new_carry = TinyRecursiveReasoningModel_ACTV1InnerCarry(z_H=z_H.detach(), z_L=z_L.detach())  # New carry no grad
         output = self.lm_head(z_H)[:, self.puzzle_emb_len:]
         q_logits = self.q_head(z_H[:, 0]).to(torch.float32) # Q-head; uses the first puzzle_emb position
-        return new_carry, output, (q_logits[..., 0], q_logits[..., 1])
-
+        
+        # 반환 튜플의 마지막에 궤적 리스트를 추가합니다.
+        return new_carry, output, (q_logits[..., 0], q_logits[..., 1]), trajectory_vectors
+    # ====================================================================================
+    # MODIFICATION END
+    # ====================================================================================
 
 class TinyRecursiveReasoningModel_ACTV1(nn.Module):
     """ACT wrapper."""
@@ -246,8 +264,18 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
             current_data={k: torch.empty_like(v) for k, v in batch.items()}
         )
         
-    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1Carry, batch: Dict[str, torch.Tensor]) -> Tuple[TinyRecursiveReasoningModel_ACTV1Carry, Dict[str, torch.Tensor]]:
-
+    # ====================================================================================
+    # MODIFICATION START: ACTV1.forward
+    # ====================================================================================
+    # 기존 반환 타입 어노테이션 `Tuple[..., Dict[...]]`을 유지합니다.
+    # pretrain.py의 `train_batch`가 이 구조를 기대하기 때문입니다.
+    def forward(self, carry: TinyRecursiveReasoningModel_ACTV1Carry, batch: Dict[str, torch.Tensor], return_keys: List[str] = []) -> Tuple[TinyRecursiveReasoningModel_ACTV1Carry, torch.Tensor, Dict[str, torch.Tensor], Dict[str, torch.Tensor], bool]:
+        """
+        `pretrain.py`의 `train_batch` 함수 시그니처와 호환성을 유지하기 위해,
+        `return_keys` 인자를 추가하고, 반환값 구조를 맞춥니다.
+        원래 코드베이스에는 이 모델 클래스가 loss 클래스에 래핑되어 이 변환이 일어나지만,
+        우리는 모델 자체를 수정하므로 이 단계에서 호환성을 맞춰줍니다.
+        """
         # Update data, carry (removing halted sequences)
         new_inner_carry = self.inner.reset_carry(carry.halted, carry.inner_carry)
         
@@ -255,15 +283,26 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
 
         new_current_data = {k: torch.where(carry.halted.view((-1, ) + (1, ) * (batch[k].ndim - 1)), batch[k], v) for k, v in carry.current_data.items()}
 
-        # Forward inner model
-        new_inner_carry, logits, (q_halt_logits, q_continue_logits) = self.inner(new_inner_carry, new_current_data)
+        # Forward inner model. 이제 궤적(trajectory)을 추가로 반환받습니다.
+        new_inner_carry, logits, (q_halt_logits, q_continue_logits), trajectory = self.inner(new_inner_carry, new_current_data)
 
-        outputs = {
-            "logits": logits,
-            "q_halt_logits": q_halt_logits,
-            "q_continue_logits": q_continue_logits
-        }
+        # `pretrain.py`가 기대하는 `outputs` 딕셔너리 구조를 만듭니다.
+        # 이 모델의 원본 사용 방식은 `losses.py`의 래퍼 클래스를 통하는 것이지만,
+        # 우리는 모델을 직접 사용하므로 `pretrain.py`와의 호환성을 여기서 맞춰줍니다.
+        preds = {}
+        if "preds" in return_keys:
+            preds["preds"] = torch.argmax(logits, dim=-1)
+        
+        # `return_keys`에 'trajectory'가 요청된 경우에만 preds에 추가합니다.
+        if "trajectory" in return_keys:
+            # torch.stack을 사용하여 궤적 리스트를 단일 텐서로 변환합니다.
+            # [num_steps, batch_size, seq_len, hidden_dim]
+            preds["trajectory"] = torch.stack(trajectory)
+            
+        loss = torch.tensor(0.0, device=logits.device) # 이 forward에서는 loss를 직접 계산하지 않음
+        metrics = {} # 이 forward에서는 metrics를 직접 계산하지 않음
 
+        # ACT 로직 (기존과 동일)
         with torch.no_grad():
             # Step
             new_steps = new_steps + 1
@@ -275,8 +314,6 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
             if self.training and (self.config.halt_max_steps > 1):
 
                 # Halt signal
-                # NOTE: During evaluation, always use max steps, this is to guarantee the same halting steps inside a batch for batching purposes
-                
                 if self.config.no_ACT_continue:
                     halted = halted | (q_halt_logits > 0)
                 else:
@@ -288,10 +325,16 @@ class TinyRecursiveReasoningModel_ACTV1(nn.Module):
 
                 if not self.config.no_ACT_continue:
                     # Compute target Q
-                    # NOTE: No replay buffer and target networks for computing target Q-value.
-                    # As batch_size is large, there're many parallel envs.
-                    # Similar concept as PQN https://arxiv.org/abs/2407.04811
-                    _, _, (next_q_halt_logits, next_q_continue_logits), _, _ = self.inner(new_inner_carry, new_current_data)
-                    outputs["target_q_continue"] = torch.sigmoid(torch.where(is_last_step, next_q_halt_logits, torch.maximum(next_q_halt_logits, next_q_continue_logits)))
+                    _, _, (next_q_halt_logits, next_q_continue_logits), _ = self.inner(new_inner_carry, new_current_data)
+                    # `pretrain.py`는 이 값을 직접 사용하지 않으므로, preds에 추가할 필요는 없습니다.
+                    # target_q_continue = torch.sigmoid(torch.where(is_last_step, next_q_halt_logits, torch.maximum(next_q_halt_logits, next_q_continue_logits)))
 
-        return TinyRecursiveReasoningModel_ACTV1Carry(new_inner_carry, new_steps, halted, new_current_data), outputs
+        all_finish = torch.all(halted)
+        new_carry = TinyRecursiveReasoningModel_ACTV1Carry(new_inner_carry, new_steps, halted, new_current_data)
+
+        # `pretrain.py`의 `train_batch`가 기대하는 최종 반환 튜플 형식에 맞춥니다.
+        # (carry, loss, metrics, preds, all_finish)
+        return new_carry, loss, metrics, preds, all_finish
+    # ====================================================================================
+    # MODIFICATION END
+    # ====================================================================================

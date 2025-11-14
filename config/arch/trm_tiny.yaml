@@ -1,0 +1,30 @@
+# Ultra-lightweight TRM for very limited GPU memory
+# Model size: ~2M parameters (vs 7M for standard)
+# Use for: Colab free tier, older GPUs with <12GB VRAM
+
+name: recursive_reasoning.trm@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+halt_exploration_prob: 0.1
+halt_max_steps: 12  # Reduced from 16
+
+H_cycles: 2  # Reduced from 3
+L_cycles: 3  # Reduced from 6
+
+H_layers: 0
+L_layers: 1  # Reduced from 2
+
+hidden_size: 256  # Reduced from 512
+num_heads: 4  # Reduced from 8
+expansion: 4
+
+puzzle_emb_ndim: ${.hidden_size}
+
+pos_encodings: rope
+forward_dtype: bfloat16
+
+mlp_t: False
+puzzle_emb_len: 16
+no_ACT_continue: True

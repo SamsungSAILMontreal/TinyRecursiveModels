@@ -1,0 +1,52 @@
+# Single GPU Cloud Training Config
+# Optimized for: Google Colab (T4/V100), AWS g4dn, Azure NC-series
+# Expected GPU memory: 16GB+
+# Training time: 4-8 hours for initial convergence
+
+defaults:
+  - arch: trm
+  - _self_
+
+hydra:
+  output_subdir: null
+
+# Data paths - update these based on your setup
+data_paths: ['data/arc1-colab-aug-100']
+data_paths_test: []
+
+evaluators:
+  - name: arc@ARC
+
+# Hyperparams - Training
+# Reduced batch size for single GPU
+global_batch_size: 64  # Adjust down to 32 if OOM errors occur
+
+epochs: 20000  # Reasonable for experimentation
+eval_interval: 2000
+checkpoint_every_eval: True
+
+# Learning rate schedule
+lr: 1e-4
+lr_min_ratio: 1.0
+lr_warmup_steps: 500
+
+# Optimizer settings
+beta1: 0.9
+beta2: 0.95
+weight_decay: 0.1
+puzzle_emb_weight_decay: 0.1
+
+# Puzzle embedding learning
+puzzle_emb_lr: 1e-2
+
+seed: 0
+min_eval_interval: 0
+
+# EMA disabled for faster training, enable for better final performance
+ema: False
+ema_rate: 0.999
+
+freeze_weights: False
+
+# Project naming
+project_name: "TRM-Cloud-Single-GPU"

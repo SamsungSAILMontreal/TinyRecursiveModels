@@ -1,0 +1,52 @@
+# High-Memory Single GPU Config
+# Optimized for: A100 (40GB/80GB), H100, AWS p4d, GCP a2
+# Expected GPU memory: 40GB+
+# Training time: 1-3 hours for initial convergence
+
+defaults:
+  - arch: trm
+  - _self_
+
+hydra:
+  output_subdir: null
+
+# Data paths
+data_paths: ['data/arc1concept-aug-1000']
+data_paths_test: []
+
+evaluators:
+  - name: arc@ARC
+
+# Hyperparams - Training
+# Larger batch size for high-memory GPU
+global_batch_size: 256  # Can go up to 512 on 80GB A100
+
+epochs: 50000
+eval_interval: 5000
+checkpoint_every_eval: True
+
+# Learning rate schedule
+lr: 1e-4
+lr_min_ratio: 1.0
+lr_warmup_steps: 1000
+
+# Optimizer settings
+beta1: 0.9
+beta2: 0.95
+weight_decay: 0.1
+puzzle_emb_weight_decay: 0.1
+
+# Puzzle embedding learning
+puzzle_emb_lr: 1e-2
+
+seed: 0
+min_eval_interval: 0
+
+# Enable EMA for better performance
+ema: True
+ema_rate: 0.999
+
+freeze_weights: False
+
+# Project naming
+project_name: "TRM-Cloud-High-Memory"

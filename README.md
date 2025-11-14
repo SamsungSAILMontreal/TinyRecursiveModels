@@ -27,9 +27,44 @@ Tiny Recursion Model (TRM) recursively improves its predicted answer y with a ti
 pip install --upgrade pip wheel setuptools
 pip install --pre --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu126 # install torch based on your cuda version
 pip install -r requirements.txt # install requirements
-pip install --no-cache-dir --no-build-isolation adam-atan2 
+pip install --no-cache-dir --no-build-isolation adam-atan2
 wandb login YOUR-LOGIN # login if you want the logger to sync results to your Weights & Biases (https://wandb.ai/)
 ```
+
+### 🚀 Cloud Training (New!)
+
+Train TRM on cloud GPUs in under 5 minutes! No local setup required.
+
+**Quick Start Options:**
+
+1. **Google Colab (Free)** - Best for beginners
+   - [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/HarleyCoops/TinyRecursiveInference/blob/main/notebooks/train_colab.ipynb)
+   - Just click and run! All setup is automated.
+
+2. **Any Cloud Platform** - One-line setup
+   ```bash
+   git clone https://github.com/HarleyCoops/TinyRecursiveInference.git && \
+   cd TinyRecursiveInference && \
+   bash scripts/setup_cloud_training.sh
+   ```
+
+**Supported Platforms:**
+- Google Colab (Free tier + Pro)
+- AWS EC2 (g4dn, p3, p4d instances)
+- Google Cloud Platform (with preemptible GPUs)
+- Azure ML
+- Prime Intellect (distributed training)
+- HuggingFace Spaces (inference)
+
+**Documentation:**
+- 📖 [Quick Start Guide](docs/QUICK_START_CLOUD.md) - Get training in 5 minutes
+- 📚 [Complete Cloud Training Guide](docs/CLOUD_TRAINING.md) - Platform-specific instructions
+- 💰 [Cost Estimates](docs/CLOUD_TRAINING.md#cost-estimates) - $0-$4 for initial training
+
+**Training Time Estimates:**
+- T4 GPU (Colab Free): 6-8 hours
+- A100 GPU (Colab Pro+/Cloud): 1-2 hours
+- Multi-GPU: See [AGENTS.md](AGENTS.md)
 
 ### Dataset Preparation
 

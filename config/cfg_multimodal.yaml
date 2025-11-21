@@ -1,0 +1,102 @@
+# Multimodal Training Config (HESC)
+# Text + Vision + Structured data with capsule compression
+
+defaults:
+  - arch: multimodal_hesc
+  - _self_
+
+hydra:
+  output_subdir: null
+
+# Data paths
+data_paths: ['datasets/vision_unified']
+data_paths_test: []
+
+evaluators: []
+
+# HESC capsule mode (REQUIRED)
+semantic_mode: true
+semantic_dataset: "datasets/vision_unified/capsule_dataset.pt"
+semantic_eval_dataset: "datasets/vision_unified/capsule_dataset_test.pt"
+
+# Multi-Token Prediction (DeepSeek-V3 inspired)
+enable_mtp: true
+
+# DQN Enhancement Parameters
+enable_dqn: true
+enable_entropy_regularization: true  # Encourage Q-head to explore all 3 actions
+entropy_regularization_weight: 0.01  # Small bonus for action diversity
+
+# Memory Bank Configuration (T4 GPU Training)
+enable_memory: true
+memory_capacity: 16384  # Large capacity for training
+memory_num_heads: 16  # Maximum heads for T4 GPU
+memory_dropout: 0.1
+
+# TRM Recursive Reasoning Features (NEW - ENABLED)
+enable_adaptive_hcycles: true  # Early exit from H-cycles based on Q-value confidence
+hcycle_confidence_threshold: 2.0  # Threshold for early exit (2.0 = ~88% probability)
+enable_hierarchical_attention: true  # Parent-child attention bias for capsule structure
+enable_capsule_expansion: true  # Capsule expansion via DQN (FULL SUPPORT with children embeddings)
+q_head_num_actions: 3  # Q-head actions: [HALT, CONTINUE, EXPAND]
+q_head_type: "mlp"  # Options: mlp, rnn, mini_attention
+
+# ===== Vision Capsule Pooling Strategy (T4 GPU Training) =====
+vision:
+  capsule:
+    method: "attention"  # "avg" | "attention" | "yolo_mapping"
+    target_capsules: 24  # Maximum capsules for training (distill to 16 for deployment)
+    children_per_capsule: 6  # More children for training (distill to 4)
+    attention_channels: 1024  # Large channels for T4 GPU
+    real_children: true  # Use top-m patches as children (vs fake duplicates)
+    children_selection: "topk_attention"  # "topk_attention" | "weighted_avg"
+
+# ===== YOLO Zone Detection (Phase 2+) =====
+yolo:
+  enabled: false  # Set true to enable zone detection
+  proposals: 32  # Max proposals from detector
+  proposal_threshold: 0.3  # Objectness threshold
+  mapping_method: "topk"  # "topk" | "nms"
+  pretrain_synthetic: false  # Pretrain on synthetic zone labels
+
+# ===== DQN Action Space =====
+dqn:
+  num_actions_meta: 2  # HALT, CONTINUE
+  use_topk_mapping: false  # Map variable proposals to fixed slots (Phase 2)
+  slot_mask_empty: true  # Mask empty slots in Q-head
+
+# Training hyperparameters (T4 GPU - 16GB VRAM)
+image_size: 384  # High resolution for training (will resize to 256 for deployment)
+global_batch_size: 256  # T4 GPU batch size
+epochs: 50000
+eval_interval: 1000
+checkpoint_every_eval: True
+
+# Learning rates
+lr: 3e-4  # Higher for multimodal (diverse data)
+lr_min_ratio: 0.1
+lr_warmup_steps: 1000
+
+# Optimizer (AdamW)
+beta1: 0.9
+beta2: 0.95
+weight_decay: 0.05  # Medium regularization
+
+# Puzzle embeddings (for multi-task)
+puzzle_emb_lr: 1e-3
+puzzle_emb_weight_decay: 0.1
+
+seed: 42
+min_eval_interval: 0
+
+checkpoint_path: "checkpoints/multimodal-hesc"
+
+# Project naming
+project_name: "Multimodal-HESC"
+run_name: null
+
+# EMA (stability for mixed data)
+ema: True
+ema_rate: 0.999
+
+freeze_weights: False

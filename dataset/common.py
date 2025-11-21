@@ -47,3 +47,15 @@ def dihedral_transform(arr: np.ndarray, tid: int) -> np.ndarray:
     
 def inverse_dihedral_transform(arr: np.ndarray, tid: int) -> np.ndarray:
     return dihedral_transform(arr, DIHEDRAL_INVERSE[tid])
+
+
+def get_tokenizer(tokenizer_name: str = "gpt2"):
+    """Load a HuggingFace tokenizer."""
+    from transformers import AutoTokenizer
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+    
+    # Ensure pad token exists
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    
+    return tokenizer

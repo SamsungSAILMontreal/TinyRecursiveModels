@@ -1,42 +1,92 @@
-# ARC training config
+# Vision-Unified Training Config
+# Used with multimodal_hesc architecture (COCONUT enabled)
 
 defaults:
-  - arch: trm
+  - arch: multimodal_hesc
   - _self_
 
 hydra:
   output_subdir: null
 
-# Data path
-data_paths: ['data/arc-aug-1000']
+# Data paths (will be overridden by train.py)
+data_paths: ['datasets/vision_unified']
 data_paths_test: []
 
 evaluators:
   - name: arc@ARC
 
-# Hyperparams - Training
-global_batch_size: 768
+# Training hyperparameters
+global_batch_size: 32  # Adjusted for T4 GPU (15GB VRAM)
 
-epochs: 100000
-eval_interval: 10000
+epochs: 100
+eval_interval: 10
 checkpoint_every_eval: True
 
-lr: 1e-4
+# Learning rates (TRM paper exact)
+lr: 1e-4  # Paper uses 1e-4 for ARC
 lr_min_ratio: 1.0
-lr_warmup_steps: 2000
+lr_warmup_steps: 2000  # Paper uses 2K warmup
 
-# Standard hyperparameter settings for LM, as used in Llama
+# Optimizer (TRM paper exact)
 beta1: 0.9
 beta2: 0.95
-weight_decay: 0.1
+weight_decay: 0.1  # Paper: 0.1 for ARC (1.0 for Sudoku)
 puzzle_emb_weight_decay: 0.1
 
-# Hyperparams - Puzzle embeddings training
-puzzle_emb_lr: 1e-2
+# Puzzle embeddings
+puzzle_emb_lr: 1e-2  # Paper: 1e-2 for embeddings
 
 seed: 0
 min_eval_interval: 0 # when to start the eval
 
+checkpoint_path: checkpoints/multimodal-hesc  # Auto-set by train.py
+load_checkpoint: null  # Auto-resume from checkpoint_path/latest.pt
+
 ema: False # use Exponential-Moving-Average
 ema_rate: 0.999 # EMA-rate
 freeze_weights: False # If True, freeze weights and only learn the embeddings
+
+# TRM Recursive Reasoning Features (NEW)
+enable_dqn: true
+enable_entropy_regularization: true
+entropy_regularization_weight: 0.01
+enable_memory: true
+enable_mtp: true
+enable_adaptive_hcycles: true
+hcycle_confidence_threshold: 2.0
+enable_hierarchical_attention: true
+q_head_num_actions: 3
+q_head_type: "mlp"
+
+# DQN Stability Features
+dqn_warmup_ratio: 0.1  # Freeze representation for first 10% of training
+dqn_warmup_steps: 5000  # Deprecated: use dqn_warmup_ratio
+freeze_representation_during_warmup: true  # Prevent DQN from destabilizing early learning
+
+# Optimizer Stability
+optimizer_type: "adamatan2"  # "adamatan2" or "adamw"
+enable_optimizer_fallback: true  # Auto-switch to AdamW on NaN
+nan_threshold_for_fallback: 3  # Switch after 3 NaN occurrences
+
+# Expansion Penalty Annealing (prevents over-expansion early, allows it later)
+expansion_penalty_schedule: "cosine"  # "cosine", "linear", "exponential", or "fixed"
+expansion_penalty_start: 0.1  # High penalty initially (discourage expansion)
+expansion_penalty_end: 0.001  # Low penalty after learning (allow expansion)
+expansion_anneal_ratio: 0.5  # Anneal over first 50% of training
+
+# Replay Buffer Sampling (on-policy bias)
+replay_recent_fraction: 0.25  # 25% from recent transitions (last 1000 steps)
+replay_max_age: 100000  # Discard transitions older than 100K steps
+
+# === PHASE 1 ADVANCED FEATURES ===
+
+# Q-Head Temperature Annealing (Exploration → Exploitation)
+enable_q_temperature_annealing: true
+q_temperature_start: 1.0  # High temp = more exploration
+q_temperature_end: 0.1    # Low temp = more exploitation  
+q_temperature_anneal_ratio: 1.0  # Anneal over full training (100%)
+q_temperature_schedule: "exponential"  # "linear", "exponential", or "cosine"
+
+# Per-Layer Gradient Normalization
+enable_per_layer_grad_norm: true
+# Per-module max gradient norms (defined in arch config)

@@ -1,0 +1,104 @@
+# Text Generation Architecture
+# Optimized for language modeling with seq_len=256 tokens
+# Use case: WikiText, books, code, natural language
+
+name: recursive_reasoning.trm@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+# ===== Text-Optimized Recursion =====
+# Derived for seq_len=256 (tokens)
+# Total recursions: 4 × (3+1) = 16 forward passes
+H_cycles: 4  # High-level reasoning iterations
+L_cycles: 3  # Low-level processing per H-cycle
+
+halt_exploration_prob: 0.1
+halt_max_steps: 20  # Higher for longer sequences
+
+# ===== Model Architecture =====
+H_layers: 0
+L_layers: 2
+
+hidden_size: 512
+num_heads: 8
+num_key_value_heads: 2  # GQA optimization
+expansion: 4
+
+puzzle_emb_ndim: 0  # No puzzle embeddings for text
+puzzle_emb_len: 0
+
+pos_encodings: rope
+forward_dtype: float16
+rope_theta: 10000  # Standard for text
+
+mlp_t: False
+no_ACT_continue: True
+
+# ===== Deep Supervision =====
+# With 16 total recursions, supervise every 2 steps
+deep_supervision_steps: 8
+enable_gradient_checkpointing: True
+
+# ===== Stability =====
+use_ema: True
+ema_decay: 0.9995  # Slightly higher for text (smoother)
+
+# ===== DQN (DISABLED for text generation) =====
+enable_dqn: False
+dqn_buffer_capacity: 500000
+dqn_buffer_min_size: 50000
+dqn_batch_size: 256
+dqn_gamma: 0.99
+dqn_epsilon_start: 0.3
+dqn_epsilon_end: 0.05
+dqn_epsilon_decay_steps: 100000
+dqn_warmstart_steps: 10000
+
+# ===== Reward Shaping =====
+reward_step_penalty: 0.01
+reward_terminal_correct: 1.0
+reward_terminal_incorrect: -0.5
+
+# ===== Q-Head =====
+q_head_type: mlp
+q_head_hidden_size: 128
+q_head_num_layers: 1
+
+# ===== Memory Bank (DISABLED) =====
+enable_memory: False
+memory_capacity: 4096
+memory_num_heads: 8
+memory_dropout: 0.1
+memory_reward_bonus: 0.5
+memory_reward_threshold: 0.05
+
+# ===== Intrinsic Curiosity (DISABLED) =====
+enable_count_curiosity: False
+enable_rnd_curiosity: False
+
+# ===== Entropy Regularization (DISABLED) =====
+enable_entropy_regularization: False
+
+# ===== Prioritized Replay (DISABLED) =====
+enable_prioritized_replay: False
+per_alpha: 0.6
+per_beta: 0.4
+
+# ===== Multi-Token Prediction (Optional for text) =====
+enable_mtp: False  # Can enable for +10-15% efficiency
+mtp_num_depths: 3
+mtp_loss_weight: 0.5
+mtp_share_embeddings: True
+mtp_share_output_head: True
+
+# ===== TRM Recursive Reasoning Features (NEW) =====
+enable_adaptive_hcycles: true
+hcycle_confidence_threshold: 2.0
+enable_hierarchical_attention: false
+q_head_num_actions: 3
+
+# ===== Optimization =====
+cpu_optimized: False
+use_gelu: True
+ffn_expansion_ratio: 4.0

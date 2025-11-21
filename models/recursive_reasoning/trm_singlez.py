@@ -55,7 +55,7 @@ class TinyRecursiveReasoningModel_ACTV1Config(BaseModel):
     halt_max_steps: int
     halt_exploration_prob: float
 
-    forward_dtype: str = "bfloat16"
+    forward_dtype: str = "float16"
 
     # Alexia: added
     mlp_t: bool = False # use mlp on L instead of transformer

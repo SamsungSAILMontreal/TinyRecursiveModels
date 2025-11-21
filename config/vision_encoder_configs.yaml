@@ -1,0 +1,52 @@
+# TRM Vision Encoder Configurations
+# Unified recursive reasoning architecture for vision encoding
+
+# Lightweight TRM Encoder (Fast inference)
+lightweight_trm:
+  encoder_type: 'trm'
+  encoder_num_layers: 1
+  encoder_H_cycles: 1
+  encoder_L_cycles: 2
+  hidden_size: 512
+  target_capsules: 12
+  children_per_capsule: 4
+  # Total: 1×2 = 2 recursive passes
+  # Params: ~2M
+  # Use case: Fast inference, mobile deployment
+
+# Standard TRM Encoder (Balanced)
+standard_trm:
+  encoder_type: 'trm'
+  encoder_num_layers: 2
+  encoder_H_cycles: 2
+  encoder_L_cycles: 3
+  hidden_size: 512
+  target_capsules: 12
+  children_per_capsule: 4
+  # Total: 2×3 = 6 recursive passes
+  # Params: ~5M
+  # Use case: Default for most tasks
+
+# Deep TRM Encoder (Maximum capability)
+deep_trm:
+  encoder_type: 'trm'
+  encoder_num_layers: 3
+  encoder_H_cycles: 3
+  encoder_L_cycles: 4
+  hidden_size: 512
+  target_capsules: 12
+  children_per_capsule: 4
+  # Total: 3×4 = 12 recursive passes
+  # Params: ~8M
+  # Use case: Complex visual reasoning (ARC, spatial puzzles)
+
+# Large TRM Encoder (Research scale)
+large_trm:
+  encoder_type: 'trm'
+  encoder_num_layers: 4
+  encoder_H_cycles: 4
+  encoder_L_cycles: 5
+  hidden_size: 768
+  target_capsules: 16
+  children_per_capsule: 4
+ 

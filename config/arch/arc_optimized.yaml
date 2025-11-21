@@ -1,0 +1,126 @@
+# ARC-AGI Reasoning Architecture
+# Optimized for 30x30 grid spatial reasoning
+# Use case: ARC-AGI-1, ARC-AGI-2, geometric puzzles
+
+name: recursive_reasoning.trm@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+# ===== ARC-Optimized Recursion =====
+# Paper-derived for seq_len=900 (30×30 grid)
+# Total recursions: 3 × (6+1) = 21 forward passes (TRM paper optimal)
+H_cycles: 3  # High-level spatial reasoning
+L_cycles: 6  # Low-level grid processing (paper optimal)
+
+halt_exploration_prob: 0.1
+halt_max_steps: 16
+
+# ===== Model Architecture =====
+H_layers: 0
+L_layers: 2  # TRM paper: "less is more"
+
+# CRITICAL: Paper uses 512 for ARC despite saying 128 is optimal
+# 512 provides capacity for 30×30 spatial complexity
+hidden_size: 512
+num_heads: 8
+num_key_value_heads: 2  # GQA optimization
+expansion: 4
+
+# ===== TRM Vision Encoder (Deeper for ARC) =====
+encoder_num_layers: 3
+encoder_H_cycles: 3
+encoder_L_cycles: 4
+# Total encoder passes: 3×4 = 12 (more spatial reasoning)
+
+puzzle_emb_ndim: 0
+puzzle_emb_len: 0
+
+pos_encodings: rope
+forward_dtype: float16
+rope_theta: 10000
+
+mlp_t: False
+no_ACT_continue: True
+
+# ===== Deep Supervision =====
+# Paper uses N_sup=16 for 21 total recursions
+# Supervise every 21/16 ≈ 1.3 recursions
+deep_supervision_steps: 16
+enable_gradient_checkpointing: True
+
+# ===== Stability (CRITICAL - Paper says prevents collapse) =====
+use_ema: True
+ema_decay: 0.999
+
+# ===== DQN (DISABLED - Paper validates simple ACT > DQN) =====
+enable_dqn: False
+dqn_buffer_capacity: 500000
+dqn_buffer_min_size: 50000
+dqn_batch_size: 256
+dqn_gamma: 0.99
+dqn_epsilon_start: 0.3
+dqn_epsilon_end: 0.05
+dqn_epsilon_decay_steps: 100000
+dqn_warmstart_steps: 10000
+
+# ===== Reward Shaping =====
+reward_step_penalty: 0.01
+reward_terminal_correct: 1.0
+reward_terminal_incorrect: -0.5
+
+# ===== Q-Head =====
+q_head_type: mlp
+q_head_hidden_size: 128
+q_head_num_layers: 1
+
+# ===== Memory Bank (DISABLED) =====
+enable_memory: False
+memory_capacity: 4096
+memory_num_heads: 8
+memory_dropout: 0.1
+memory_reward_bonus: 0.5
+memory_reward_threshold: 0.05
+
+# ===== Intrinsic Curiosity (DISABLED) =====
+enable_count_curiosity: False
+enable_rnd_curiosity: False
+
+# ===== Entropy Regularization (DISABLED) =====
+enable_entropy_regularization: False
+
+# ===== Prioritized Replay (DISABLED) =====
+enable_prioritized_replay: False
+
+# ===== Per-Layer Gradient Norms (PHASE 1) =====
+encoder_max_grad_norm: 1.0
+h_level_max_grad_norm: 1.0
+l_level_max_grad_norm: 1.0
+q_head_max_grad_norm: 2.0  # Higher for RL signal
+memory_max_grad_norm: 1.0
+lm_head_max_grad_norm: 1.0
+per_alpha: 0.6
+per_beta: 0.4
+
+# ===== Multi-Token Prediction (DISABLED) =====
+enable_mtp: False
+mtp_num_depths: 3
+mtp_loss_weight: 0.5
+mtp_share_embeddings: True
+mtp_share_output_head: True
+
+# ===== HESC-Specific Parameters =====
+reconstruction_weight: 0.5
+checksum_halt_threshold: 0.5
+
+# ===== TRM Recursive Reasoning Features (NEW) =====
+enable_adaptive_hcycles: true
+hcycle_confidence_threshold: 2.0
+enable_hierarchical_attention: true
+enable_capsule_expansion: false
+q_head_num_actions: 3
+
+# ===== Optimization =====
+cpu_optimized: False
+use_gelu: True
+ffn_expansion_ratio: 4.0

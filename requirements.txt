@@ -1,20 +1,30 @@
-torch
-adam-atan2
-einops
-tqdm
+
+Pillow
+
+# Core utilities
 coolname
-pydantic
-argdantic
-wandb
+pygments
 omegaconf
 hydra-core
-huggingface_hub
-packaging 
-ninja 
-wheel 
-setuptools 
-setuptools-scm
+argdantic
+pydantic
 pydantic-core
-huggingface_hub 
+flash-attn
+safetensors
+
+
+# Numerical and scientific stack
 numba
-triton
+einops
+adam-atan2-pytorch
+bitsandbytes
+scikit-learn
+tqdm
+
+# AI & model management
+wandb
+datasets
+huggingface-hub
+opencv-python
+gradio
+lz4

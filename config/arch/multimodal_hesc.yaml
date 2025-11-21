@@ -1,0 +1,126 @@
+# Multimodal HESC Architecture
+# Optimized for 12-capsule hierarchical semantic encoding
+# Use case: Text + Vision + Structured data with capsule compression
+
+name: recursive_reasoning.trm@TinyRecursiveReasoningModel_ACTV1
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+# ===== HESC-Optimized Recursion (T4 GPU Training) =====
+# Derived for seq_len=24 (capsules), not 900 (pixels)
+# Total recursions: 5 × (5+1) = 30 forward passes
+H_cycles: 5  # High-level reasoning iterations (max quality)
+L_cycles: 5  # Low-level processing per H-cycle (max quality)
+
+halt_exploration_prob: 0.1
+halt_max_steps: 64  # Maximum adaptive steps for training
+
+# ===== Model Architecture (T4 GPU Training) =====
+H_layers: 0
+L_layers: 4  # 4-layer transformer for maximum quality
+
+hidden_size: 1024  # Maximum capsule embedding for training
+num_heads: 16      # Maximum attention heads for T4 GPU
+num_key_value_heads: 16  # Full MHA for training (compress to 12 for deployment)
+expansion: 4       # FFN expansion
+
+# ===== TRM Vision Encoder (T4 GPU Training) =====
+encoder_num_layers: 4  # Maximum depth for training
+encoder_H_cycles: 4    # Maximum high-level reasoning
+encoder_L_cycles: 5    # Maximum low-level refinement
+# Total encoder passes: 4×5 = 20
+
+puzzle_emb_ndim: ${.hidden_size}
+puzzle_emb_len: 16
+
+pos_encodings: rope
+forward_dtype: float16
+rope_theta: 10000
+
+mlp_t: False
+no_ACT_continue: True
+
+# ===== Deep Supervision (Aligned with recursion depth) =====
+# With 9 total recursions, supervise every 3 steps (cleaner intervals)
+deep_supervision_steps: 3  # Supervision at steps 3, 6, 9
+enable_gradient_checkpointing: True  # 40-50% memory reduction with deep supervision
+
+# ===== Stability (Critical for HESC) =====
+use_ema: True
+ema_decay: 0.999
+
+# ===== DQN (Re-enabled - compatible with vision-unified) =====
+enable_dqn: True
+dqn_buffer_capacity: 500000  # Corrected from 20K (was filling in <1 step)
+dqn_buffer_min_size: 1000  # Reduced from 50K - start DQN training earlier
+dqn_batch_size: 128  # Reduced from 256 for smaller buffer
+dqn_gamma: 0.99
+dqn_epsilon_start: 0.3
+dqn_epsilon_end: 0.05
+dqn_epsilon_decay_steps: 200000  # Longer exploration phase (was 100K)
+dqn_warmstart_steps: 10000  # Oracle heuristic warm-start
+
+# ===== Reward Shaping =====
+reward_step_penalty: 0.01
+reward_terminal_correct: 1.0
+reward_terminal_incorrect: -0.5
+
+# ===== Q-Head =====
+q_head_type: mlp
+q_head_hidden_size: 128
+q_head_num_layers: 1
+
+# ===== COCONUT Latent Planning (Meta AI) =====
+# Enables multi-path reasoning in latent space (no language decoding)
+enable_latent_planning: true
+latent_num_paths: 4  # Explore 4 reasoning paths simultaneously
+latent_planning_depth: 2  # 2 planning steps per path
+latent_use_adaptive_gate: true  # Only use planning for complex inputs
+
+# ===== Memory Bank (T4 GPU Training) =====
+enable_memory: True
+memory_capacity: 16384  # Maximum capacity for training
+memory_num_heads: 16    # Maximum heads for T4 GPU
+memory_dropout: 0.1
+memory_reward_bonus: 0.5
+memory_reward_threshold: 0.05
+
+# ===== Intrinsic Curiosity (Re-enabled - compatible with vision-unified) =====
+enable_count_curiosity: True
+enable_rnd_curiosity: True
+curiosity_count_beta: 0.05
+curiosity_rnd_weight: 0.1
+
+# ===== Entropy Regularization (DISABLED) =====
+enable_entropy_regularization: False
+entropy_regularization_weight: 0.01
+
+# ===== Prioritized Replay (DISABLED unless DQN enabled) =====
+enable_prioritized_replay: False
+per_alpha: 0.6
+per_beta: 0.4
+
+# ===== Multi-Token Prediction (Re-enabled - fixed for vision-unified) =====
+enable_mtp: True
+mtp_num_depths: 3
+mtp_loss_weight: 0.5
+mtp_share_embeddings: True
+mtp_share_output_head: True
+
+# ===== HESC-Specific Parameters =====
+# Reconstruction loss weight (from our fixes)
+reconstruction_weight: 0.5
+checksum_halt_threshold: 0.5
+
+# ===== TRM Recursive Reasoning Features (NEW) =====
+enable_adaptive_hcycles: true
+hcycle_confidence_threshold: 2.0
+enable_hierarchical_attention: true
+enable_capsule_expansion: false  # Requires batch['capsule_state']
+q_head_num_actions: 3
+
+# ===== Optimization =====
+cpu_optimized: False
+use_gelu: True
+ffn_expansion_ratio: 4.0

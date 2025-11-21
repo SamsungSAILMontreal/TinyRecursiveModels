@@ -68,7 +68,7 @@ class Model_ACTV2Config(BaseModel):
     act_enabled: bool = True  # If False, always run halt_max_steps (no early stopping during training)
     act_inference: bool = False  # If True, use adaptive computation during inference
 
-    forward_dtype: str = "bfloat16"
+    forward_dtype: str = "float16"
 
 
 class Model_ACTV2Block(nn.Module):

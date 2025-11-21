@@ -7,8 +7,23 @@ import numpy as np
 from numba import njit
 import torch.distributed as dist
 
-from dataset.build_arc_dataset import inverse_aug, grid_hash, arc_grid_to_np
+# from dataset.build_arc_dataset import inverse_aug, grid_hash, arc_grid_to_np
 from dataset.common import PuzzleDatasetMetadata
+import hashlib
+
+# Placeholder functions (original in build_arc_dataset.py)
+def inverse_aug(name: str):
+    """Extract original puzzle name from augmented name."""
+    # Simple implementation: return name and identity function
+    return name.split('_aug_')[0] if '_aug_' in name else name, lambda x: x
+
+def grid_hash(grid: np.ndarray) -> str:
+    """Compute hash of grid for deduplication."""
+    return hashlib.md5(grid.tobytes()).hexdigest()
+
+def arc_grid_to_np(grid: list) -> np.ndarray:
+    """Convert ARC grid (list of lists) to numpy array."""
+    return np.array(grid, dtype=np.uint8)
 
 @njit
 def _crop(grid: np.ndarray):

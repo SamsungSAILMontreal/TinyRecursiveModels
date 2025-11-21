@@ -1,0 +1,290 @@
+# Hybrid Pretrained Pipeline - Complete Training Config
+# Architecture: CLIP + Custom ViT + N2N + TRM + COCONUT
+# Optimizations: fp16 + torch.compile + batch=192
+
+hydra:
+  output_subdir: null
+
+# Architecture (wrapped under 'arch' key for PretrainConfig)
+arch:
+  name: recursive_reasoning.trm@TinyRecursiveReasoningModel_ACTV1
+  loss:
+    name: losses@ACTLossHead
+    loss_type: stablemax_cross_entropy
+
+  # TRM Recursion
+  H_cycles: 5
+  L_cycles: 5
+  halt_exploration_prob: 0.1
+  halt_max_steps: 64
+
+  # Model Architecture
+  H_layers: 0
+  L_layers: 4
+  hidden_size: 1024
+  num_heads: 16
+  num_key_value_heads: 16
+  expansion: 4
+
+  # Vision Encoder
+  encoder_num_layers: 4
+  encoder_H_cycles: 4
+  encoder_L_cycles: 5
+
+  puzzle_emb_ndim: 1024
+  puzzle_emb_len: 16
+  pos_encodings: rope
+  forward_dtype: float16
+  rope_theta: 10000
+  mlp_t: false
+  no_ACT_continue: true
+
+  # Deep Supervision
+  deep_supervision_steps: 3
+  enable_gradient_checkpointing: true
+  use_ema: true
+  ema_decay: 0.999
+
+  # DQN
+  enable_dqn: true
+  dqn_buffer_capacity: 500000
+  dqn_buffer_min_size: 1000
+  dqn_batch_size: 128
+  dqn_gamma: 0.99
+  dqn_epsilon_start: 0.3
+  dqn_epsilon_end: 0.05
+  dqn_epsilon_decay_steps: 200000
+  dqn_warmstart_steps: 10000
+
+  # Reward Shaping
+  reward_step_penalty: 0.01
+  reward_terminal_correct: 1.0
+  reward_terminal_incorrect: -0.5
+
+  # Q-Head
+  q_head_type: mlp
+  q_head_hidden_size: 128
+  q_head_num_layers: 1
+  q_head_num_actions: 3
+
+  # COCONUT Latent Planning
+  enable_latent_planning: true
+  latent_num_paths: 4
+  latent_planning_depth: 2
+  latent_use_adaptive_gate: true
+
+  # Memory Bank
+  enable_memory: true
+  memory_capacity: 512  # Reduced from 16384 to avoid OOM (512×576×1024 = 600MB vs 18GB)
+  memory_num_heads: 16
+  memory_dropout: 0.1
+  memory_reward_bonus: 0.5
+  memory_reward_threshold: 0.05
+
+  # Curiosity
+  enable_count_curiosity: true
+  enable_rnd_curiosity: true
+  curiosity_count_beta: 0.05
+  curiosity_rnd_weight: 0.1
+
+  # Other TRM Features
+  enable_entropy_regularization: false
+  entropy_regularization_weight: 0.01
+  enable_prioritized_replay: false
+  per_alpha: 0.6
+  per_beta: 0.4
+  enable_mtp: true  # Fixed for vision-unified: detects continuous vs discrete inputs automatically
+  mtp_num_depths: 3
+  mtp_loss_weight: 0.5
+  mtp_share_embeddings: true
+  mtp_share_output_head: true
+  enable_adaptive_hcycles: true
+  hcycle_confidence_threshold: 2.0
+  enable_hierarchical_attention: true
+  enable_capsule_expansion: false
+
+  # HESC
+  reconstruction_weight: 0.5
+  checksum_halt_threshold: 0.5
+
+  # Optimization
+  cpu_optimized: false
+  use_gelu: true
+  ffn_expansion_ratio: 4.0
+
+# Data paths
+data_paths: ['datasets/vision_unified']
+data_paths_test: []
+
+evaluators:
+  - name: arc@ARC
+
+# Training hyperparameters (Memory-Safe Batch Size)
+global_batch_size: 32   # Reduced from 128 to prevent system RAM OOM (SIGKILL)
+gradient_accumulation_steps: 4  # Effective batch = 32*4 = 128
+epochs: 1000000  # Very large epoch count for continuous streaming
+eval_interval: 5
+checkpoint_every_eval: true
+
+# Task-Based Training (ALWAYS ENABLED - Single Unified Pipeline)
+# Model thinks until task completion (ACT/PonderNet approach)
+max_thinking_steps: 10              # Max thinking cycles per sample
+task_completion_threshold: 0.95     # Halt confidence (stops early when confident)
+# Adaptive computation: Hard samples use 10 steps, easy samples 2-3 steps
+# Metrics: thinking_steps (avg per batch), task_completed (% early stops)
+
+# Test-Time Training (TTT - Winner Strategy)
+enable_test_time_training: false  # Enable during evaluation
+ttt_steps: 300  # Fine-tune steps per test problem
+ttt_batch_size: 1  # Fastest adaptation
+ttt_learning_rate: 8e-5  # Higher than pretraining for fast learning
+
+# Learning rates (CORRECTED for stability)
+lr: 1e-4                # Reduced from 3e-4 (only 82M trainable params, CLIP frozen)
+lr_min_ratio: 0.1       # Allow decay to 1e-5
+lr_warmup_steps: 3000   # Increased from 1000 (~5-6 epochs for stability)
+lr_scheduler: "cosine"  # Better than linear decay
+max_grad_norm: 1.0      # Prevent gradient explosions
+
+# Optimizer (IMPROVED for DQN stability)
+beta1: 0.9
+beta2: 0.98             # Increased from 0.95 for value function stability
+weight_decay: 0.1
+puzzle_emb_weight_decay: 0.1
+puzzle_emb_lr: 1e-2
+
+seed: 0
+min_eval_interval: 0
+
+checkpoint_path: checkpoints/hybrid_pretrained
+load_checkpoint: null
+
+ema: true               # Enable for smoother training
+ema_rate: 0.999
+freeze_weights: false
+
+
+# DQN Stability (SAFER)
+dqn_warmup_ratio: 0.2   # Increased from 0.1 (need more time for TRM+COCONUT stabilization)
+dqn_warmup_steps: 5000
+freeze_representation_during_warmup: true
+
+# Optimizer Stability
+optimizer_type: "adamatan2"
+enable_optimizer_fallback: true
+nan_threshold_for_fallback: 3
+
+# Expansion Penalty Annealing
+expansion_penalty_schedule: "cosine"
+expansion_penalty_start: 0.1
+expansion_penalty_end: 0.001
+expansion_anneal_ratio: 0.5
+
+# Replay Buffer
+replay_recent_fraction: 0.25
+replay_max_age: 100000
+
+# Q-Head Temperature Annealing
+enable_q_temperature_annealing: true
+q_temperature_start: 1.0
+q_temperature_end: 0.1
+q_temperature_anneal_ratio: 1.0
+q_temperature_schedule: "exponential"
+
+# Per-Layer Gradient Normalization
+enable_per_layer_grad_norm: true
+
+# Model architecture
+model:
+  # Vision Encoder (Hybrid - Always Active)
+  vision_encoder:
+    pretrained_model: 'clip'            # 'clip', 'dinov2', 'siglip'
+    fusion_type: 'gated'                # 'gated', 'attention', 'learned_avg'
+    hidden_size: 1024                   # CLIP 768 projected to 1024 to match ViT
+    num_layers: 2
+    H_cycles: 2                         # TRM iteratively refines pretrained features
+    L_cycles: 3                         # Each cycle corrects and improves
+    target_capsules: 12
+    pooling_method: 'attention'
+  
+  # TRM Recursive Reasoning
+  reasoning:
+    hidden_size: 1024
+    num_heads: 16
+    H_layers: 3
+    L_layers: 4
+    H_cycles: 2
+    L_cycles: 3
+    expansion: 4
+  
+  # COCONUT Latent Planning
+  latent_planning:
+    enable_latent_planning: true
+    latent_num_paths: 4
+    latent_planning_depth: 2
+    latent_use_adaptive_gate: true
+
+# Training (T4 GPU Optimized - 15GB VRAM)
+training:
+  # Phase 1: N2N adapter pretraining (optional, can load pretrained)
+  n2n_pretrain:
+    enabled: false                      # Set true to pretrain adapter
+    steps: 10000
+    batch_size: 512                     # Use VRAM efficiently
+    lr: 1e-4
+    augmentations: ['crop', 'flip', 'color_jitter']
+  
+  # Phase 2: End-to-end task training
+  task_training:
+    batch_size: 64                      # Memory-efficient SDPA + expandable segments
+    gradient_accumulation_steps: 3      # Effective batch = 64*3 = 192 (same total)
+    lr: 3e-4
+    freeze_pretrained: true             # Keep CLIP frozen (save VRAM)
+    freeze_n2n_adapter: false           # Adapter trainable
+    progressive_fusion: true            # Start with pretrained, shift to trainable
+    warmup_steps: 1000
+    
+    # T4-specific optimizations (no Flash Attention support)
+    mixed_precision: true               # fp16/bf16 - 2x speedup
+    torch_compile: true                 # JIT compilation - 25% speedup
+    pin_memory: true                    # Faster CPU→GPU transfer
+    cpu_offload: true                   # Offload activations to CPU (saves 3-4GB GPU)
+    num_workers: 4                      # Parallel data loading
+  
+  # Phase 3: Optional fine-tuning
+  finetune:
+    enabled: false                      # Set true for advanced training
+    unfreeze_pretrained_layers: 2       # Last 2 layers of CLIP
+    lr: 1e-5
+
+# Dataset
+dataset:
+  use_denoiser: true                    # Always use N2N for images
+  denoiser_path: 'models/checkpoints/n2n_denoiser.pt'
+  cache_images: true                    # Cache rendered text images
+
+# Distillation (Phase 3)
+distillation:
+  teacher_checkpoint_dir: checkpoints/hybrid_pretrained  # Directory to search for latest teacher checkpoint
+  temperature: 2.0
+  alpha: 0.5                            # Weight for distillation loss
+  student_config:                       # Overrides for student model (if different from main model)
+    # Example: smaller model
+    # arch:
+    #   H_layers: 2
+    #   L_layers: 2
+    null  # Use same config as teacher by default
+  
+# Expected Benefits (REALISTIC ESTIMATES - not yet measured)
+# These are aspirational targets, not empirical results
+# Actual benefits require ablation studies to verify
+#
+# Conservative estimate: +30-40% over baseline
+# - CLIP frozen: +10-20% (proven in literature)
+# - N2N Adapter: +3-8% (speculative, helps with text rendering)
+# - TRM cycles: +5-15% (iterative refinement)
+# - COCONUT: +2-8% (latent planning, very speculative)
+#
+# Optimistic estimate: +50-60% over baseline
+# Note: Benefits compound multiplicatively, not additively
+# Run ablation study to measure actual contributions

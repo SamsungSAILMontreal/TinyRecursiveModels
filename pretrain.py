@@ -127,6 +127,7 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
     model_cls = load_model_class(config.arch.name)
     loss_head_cls = load_model_class(config.arch.loss.name)
 
+    checkpoint_data = None
     with torch.device("cuda"):
         model: nn.Module = model_cls(model_cfg)
         print(model)
@@ -136,8 +137,37 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
 
         # Load checkpoint
         if rank == 0:
-            load_checkpoint(model, config)
+            checkpoint_data = load_checkpoint(model, config)
 
+    # Broadcast checkpoint data (step and optimizers) to ensure all ranks are in sync
+    if world_size > 1:
+        to_broadcast = None
+        if rank == 0 and checkpoint_data is not None:
+            # Prepare data to broadcast: extract only what's needed and move to CPU
+            to_broadcast = {
+                "step": checkpoint_data.get("step", 0),
+                "optimizers": []
+            }
+
+            # Helper to move optimizer states to CPU
+            def to_cpu(obj):
+                if isinstance(obj, torch.Tensor):
+                    return obj.cpu()
+                if isinstance(obj, dict):
+                    return {k: to_cpu(v) for k, v in obj.items()}
+                if isinstance(obj, list):
+                    return [to_cpu(v) for v in obj]
+                return obj
+
+            if "optimizers" in checkpoint_data:
+                to_broadcast["optimizers"] = to_cpu(checkpoint_data["optimizers"])
+
+        # Broadcast object list
+        objs = [to_broadcast]
+        dist.broadcast_object_list(objs, src=0)
+        checkpoint_data = objs[0]
+
+    with torch.device("cuda"):
         # Broadcast parameters from rank 0
         if world_size > 1:
             with torch.no_grad():
@@ -189,7 +219,18 @@ def create_model(config: PretrainConfig, train_metadata: PuzzleDatasetMetadata, 
             config.lr
         ]
 
-    return model, optimizers, optimizer_lrs
+    # Load optimizer states if available
+    if checkpoint_data is not None and "optimizers" in checkpoint_data:
+        if rank == 0:
+            print(f"Loading optimizer states for {len(optimizers)} optimizers")
+        if len(optimizers) != len(checkpoint_data["optimizers"]):
+             if rank == 0:
+                 print(f"Warning: Number of optimizers ({len(optimizers)}) does not match checkpoint ({len(checkpoint_data['optimizers'])}). Skipping optimizer load.")
+        else:
+             for opt, opt_state in zip(optimizers, checkpoint_data["optimizers"]):
+                 opt.load_state_dict(opt_state)
+
+    return model, optimizers, optimizer_lrs, checkpoint_data
 
 def mix_weights_direct(device, alpha, net, nets):
     sd = []
@@ -219,10 +260,15 @@ def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetada
     total_steps = int(config.epochs * train_metadata.total_groups * train_metadata.mean_puzzle_examples / config.global_batch_size)
 
     # Model
-    model, optimizers, optimizer_lrs = create_model(config, train_metadata, rank=rank, world_size=world_size)
+    model, optimizers, optimizer_lrs, checkpoint_data = create_model(config, train_metadata, rank=rank, world_size=world_size)
+
+    step = 0
+    if checkpoint_data is not None and "step" in checkpoint_data:
+        step = checkpoint_data["step"]
+        print(f"Resuming from step {step}")
 
     return TrainState(
-        step=0,
+        step=step,
         total_steps=total_steps,
 
         model=model,
@@ -238,7 +284,14 @@ def save_train_state(config: PretrainConfig, train_state: TrainState):
         return
 
     os.makedirs(config.checkpoint_path, exist_ok=True)
-    torch.save(train_state.model.state_dict(), os.path.join(config.checkpoint_path, f"step_{train_state.step}"))
+
+    checkpoint = {
+        "model": train_state.model.state_dict(),
+        "optimizers": [opt.state_dict() for opt in train_state.optimizers],
+        "step": train_state.step,
+    }
+
+    torch.save(checkpoint, os.path.join(config.checkpoint_path, f"step_{train_state.step}"))
 
 
 def load_checkpoint(model: nn.Module, config: PretrainConfig):
@@ -246,7 +299,14 @@ def load_checkpoint(model: nn.Module, config: PretrainConfig):
         print(f"Loading checkpoint {config.load_checkpoint}")
 
         # Load state dict
-        state_dict = torch.load(config.load_checkpoint, map_location="cuda")
+        checkpoint_data = torch.load(config.load_checkpoint, map_location="cuda")
+
+        state_dict = checkpoint_data
+        # Check if it is the new format
+        if isinstance(checkpoint_data, dict) and "model" in checkpoint_data:
+            state_dict = checkpoint_data["model"]
+        else:
+            checkpoint_data = None # Old format, no extra data
 
         # Resize and reset puzzle emb if needed
         puzzle_emb_name = "_orig_mod.model.inner.puzzle_emb.weights"
@@ -260,6 +320,9 @@ def load_checkpoint(model: nn.Module, config: PretrainConfig):
                     torch.mean(puzzle_emb, dim=0, keepdim=True).expand(expected_shape).contiguous()
                 )
         model.load_state_dict(state_dict, assign=True)
+
+        return checkpoint_data
+    return None
 
 
 def compute_lr(base_lr: float, config: PretrainConfig, train_state: TrainState):

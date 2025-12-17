@@ -267,7 +267,7 @@ def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetada
         step = checkpoint_data["step"]
         print(f"Resuming from step {step}")
 
-    return TrainState(
+    train_state = TrainState(
         step=step,
         total_steps=total_steps,
 
@@ -277,8 +277,10 @@ def init_train_state(config: PretrainConfig, train_metadata: PuzzleDatasetMetada
         carry=None
     )
 
+    return train_state, checkpoint_data
 
-def save_train_state(config: PretrainConfig, train_state: TrainState):
+
+def save_train_state(config: PretrainConfig, train_state: TrainState, ema_helper: Optional[Any] = None):
     # FIXME: Only saved model.
     if config.checkpoint_path is None:
         return
@@ -290,6 +292,9 @@ def save_train_state(config: PretrainConfig, train_state: TrainState):
         "optimizers": [opt.state_dict() for opt in train_state.optimizers],
         "step": train_state.step,
     }
+
+    if ema_helper is not None:
+        checkpoint["ema_helper"] = ema_helper.state_dict()
 
     torch.save(checkpoint, os.path.join(config.checkpoint_path, f"step_{train_state.step}"))
 
@@ -643,7 +648,7 @@ def launch(hydra_config: DictConfig):
         evaluators = []
 
     # Train state
-    train_state = init_train_state(config, train_metadata, rank=RANK, world_size=WORLD_SIZE)
+    train_state, checkpoint_data = init_train_state(config, train_metadata, rank=RANK, world_size=WORLD_SIZE)
 
     # Progress bar and logger
     progress_bar = None
@@ -657,6 +662,9 @@ def launch(hydra_config: DictConfig):
         print('Setup EMA')
         ema_helper = EMAHelper(mu=config.ema_rate)
         ema_helper.register(train_state.model)
+        if checkpoint_data is not None and "ema_helper" in checkpoint_data:
+            print("Loading EMA helper state")
+            ema_helper.load_state_dict(checkpoint_data["ema_helper"])
 
     # Training Loop
     for _iter_id in range(total_iters):
@@ -702,7 +710,8 @@ def launch(hydra_config: DictConfig):
             if RANK == 0:
                 print("SAVE CHECKPOINT")
             if RANK == 0 and (config.checkpoint_every_eval or (_iter_id == total_iters - 1)):
-                save_train_state(config, train_state_eval)
+                # Save online state (and EMA helper if available) to ensure resumption is correct
+                save_train_state(config, train_state, ema_helper=ema_helper)
 
             if config.ema:
                 del train_state_eval

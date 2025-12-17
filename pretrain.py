@@ -5,6 +5,8 @@ import math
 import yaml
 import shutil
 import copy
+import random
+import numpy as np
 
 import torch
 import torch.distributed as dist
@@ -291,6 +293,12 @@ def save_train_state(config: PretrainConfig, train_state: TrainState, ema_helper
         "model": train_state.model.state_dict(),
         "optimizers": [opt.state_dict() for opt in train_state.optimizers],
         "step": train_state.step,
+        "rng": {
+            "torch": torch.get_rng_state(),
+            "cuda": torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None,
+            "numpy": np.random.get_state(),
+            "random": random.getstate(),
+        }
     }
 
     if ema_helper is not None:
@@ -304,12 +312,22 @@ def load_checkpoint(model: nn.Module, config: PretrainConfig):
         print(f"Loading checkpoint {config.load_checkpoint}")
 
         # Load state dict
-        checkpoint_data = torch.load(config.load_checkpoint, map_location="cuda")
+        # We need weights_only=False because we save complex objects like optimizer state and RNG states
+        checkpoint_data = torch.load(config.load_checkpoint, map_location="cuda", weights_only=False)
 
         state_dict = checkpoint_data
         # Check if it is the new format
         if isinstance(checkpoint_data, dict) and "model" in checkpoint_data:
             state_dict = checkpoint_data["model"]
+
+            # Restore RNG state
+            if "rng" in checkpoint_data:
+                rng_state = checkpoint_data["rng"]
+                torch.set_rng_state(rng_state["torch"])
+                if rng_state["cuda"] is not None and torch.cuda.is_available():
+                    torch.cuda.set_rng_state_all(rng_state["cuda"])
+                np.random.set_state(rng_state["numpy"])
+                random.setstate(rng_state["random"])
         else:
             checkpoint_data = None # Old format, no extra data
 
@@ -591,6 +609,25 @@ def load_synced_config(hydra_config: DictConfig, rank: int, world_size: int) -> 
             config.run_name = f"{config.arch.name.split('@')[-1]} {coolname.generate_slug(2)}"
         if config.checkpoint_path is None:
             config.checkpoint_path = os.path.join("checkpoints", config.project_name, config.run_name)
+
+        # Automatic resumption: if no explicit checkpoint is given, try to find the latest one in the checkpoint path
+        if config.load_checkpoint is None and config.checkpoint_path is not None and os.path.exists(config.checkpoint_path):
+            # Checkpoints are saved as "step_{step}"
+            max_step = -1
+            max_ckpt = None
+            for fname in os.listdir(config.checkpoint_path):
+                if fname.startswith("step_") and not fname.endswith(".tmp"): # ignore tmp or other files
+                    try:
+                        step_val = int(fname.split("_")[1])
+                        if step_val > max_step:
+                            max_step = step_val
+                            max_ckpt = os.path.join(config.checkpoint_path, fname)
+                    except (ValueError, IndexError):
+                        continue
+
+            if max_ckpt is not None:
+                print(f"Auto-resume: Found latest checkpoint at {max_ckpt} (step {max_step})")
+                config.load_checkpoint = max_ckpt
 
         objects = [config]
 

@@ -19,7 +19,7 @@ class DataProcessConfig(BaseModel):
     output_dir: str
     subsets: List[str]
     test_set_name: str
-    test_set_name2: str = "your_test_set"
+    test_set_name2: str = "evaluation2"
     seed: int = 42
     num_aug: int = 1000
     puzzle_identifiers_start: int = 1 # start > 1 to handle multiple datasets

@@ -1,0 +1,47 @@
+name: recursive_reasoning.trm_ers_pmll@TinyRecursiveReasoningModel_ERS_PMLL
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+# ACT Configuration
+halt_exploration_prob: 0.1
+halt_max_steps: 16
+
+# TRM Recursive Configuration
+H_cycles: 3
+L_cycles: 6
+
+H_layers: 0
+L_layers: 2
+
+# Model Architecture
+hidden_size: 512
+num_heads: 8
+expansion: 4
+
+puzzle_emb_ndim: ${.hidden_size}
+
+pos_encodings: rope
+forward_dtype: bfloat16
+
+# TRM Specific
+mlp_t: False  # use mlp on L instead of transformer
+puzzle_emb_len: 16
+no_ACT_continue: True
+
+# ERS (Enhanced Reconsideration System) Configuration
+ers_enabled: True
+ers_memory_size: 128  # Maximum number of memory blocks to retain
+ers_temporal_decay_rate: 0.95  # Decay rate for memory confidence over time
+ers_consensus_threshold: 0.7  # Threshold for consensus strengthening
+ers_contradiction_threshold: 0.3  # Threshold for contradiction detection
+
+# PMLL (Persistent Memory Logic Loops) Configuration
+pmll_enabled: True
+pmll_reconsideration_steps: 3  # Number of multi-pass validation loops
+pmll_commitment_threshold: 0.8  # Threshold for memory commitment
+pmll_lattice_dim: 64  # Dimension of PMLL lattice routing
+
+# Topic Integrator Configuration
+topic_integrator_enabled: True
+topic_integrator_max_topics: 16  # Maximum number of topics to track

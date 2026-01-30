@@ -40,9 +40,11 @@ class MemoryBlock:
         if self.metadata is None:
             self.metadata = {}
         if self.hash_id == "" and self.content is not None:
-            # Generate hash from content
-            content_bytes = self.content.detach().cpu().numpy().tobytes()
-            self.hash_id = hashlib.sha256(content_bytes).hexdigest()[:16]
+            # Generate hash from content using torch operations
+            content_flat = self.content.detach().cpu().flatten()
+            # Simple hash based on sum and product (deterministic)
+            hash_val = (content_flat.sum().item() * 1000 + content_flat.prod().item() * 100) % 1e16
+            self.hash_id = f"{int(hash_val):016d}"
 
 
 @dataclass 
@@ -134,13 +136,13 @@ class PMLLLattice(nn.Module):
         
         # Routing network for tensor paths
         self.routing_network = nn.Sequential(
-            nn.Linear(config.hidden_size, config.pmll_lattice_dim),
+            CastedLinear(config.hidden_size, config.pmll_lattice_dim, bias=True),
             nn.SiLU(),
-            nn.Linear(config.pmll_lattice_dim, config.hidden_size)
+            CastedLinear(config.pmll_lattice_dim, config.hidden_size, bias=True)
         )
         
         # Commitment scoring
-        self.commitment_head = nn.Linear(config.hidden_size, 1)
+        self.commitment_head = CastedLinear(config.hidden_size, 1, bias=True)
         
         # Multi-petal attention for embedding refinement
         self.attention_petals = nn.ModuleList([
@@ -189,13 +191,15 @@ class TopicIntegrator(nn.Module):
         self.forward_dtype = getattr(torch, config.forward_dtype)
         
         # Topic embedding space
-        self.topic_embeddings = nn.Embedding(
+        self.topic_embeddings = CastedEmbedding(
             config.topic_integrator_max_topics,
-            config.hidden_size
+            config.hidden_size,
+            init_std=1.0 / math.sqrt(config.hidden_size),
+            cast_to=self.forward_dtype
         )
         
         # Topic assignment network
-        self.topic_router = nn.Linear(config.hidden_size, config.topic_integrator_max_topics)
+        self.topic_router = CastedLinear(config.hidden_size, config.topic_integrator_max_topics, bias=True)
         
         # Topic fusion layer
         self.topic_fusion = SwiGLU(
@@ -214,7 +218,7 @@ class TopicIntegrator(nn.Module):
         # Get topic embeddings
         topic_context = torch.matmul(
             topic_weights,
-            self.topic_embeddings.weight
+            self.topic_embeddings.embedding_weight.to(self.forward_dtype)
         ).unsqueeze(1)
         
         # Fuse with hidden states
@@ -233,12 +237,12 @@ class EnhancedReconsiderationSystem(nn.Module):
         self.forward_dtype = getattr(torch, config.forward_dtype)
         
         # Memory similarity computation
-        self.memory_query = nn.Linear(config.hidden_size, config.hidden_size)
-        self.memory_key = nn.Linear(config.hidden_size, config.hidden_size)
+        self.memory_query = CastedLinear(config.hidden_size, config.hidden_size, bias=False)
+        self.memory_key = CastedLinear(config.hidden_size, config.hidden_size, bias=False)
         
         # Consensus and contradiction scoring
-        self.consensus_head = nn.Linear(config.hidden_size * 2, 1)
-        self.contradiction_head = nn.Linear(config.hidden_size * 2, 1)
+        self.consensus_head = CastedLinear(config.hidden_size * 2, 1, bias=True)
+        self.contradiction_head = CastedLinear(config.hidden_size * 2, 1, bias=True)
         
     def temporal_decay(self, memory_blocks: List[MemoryBlock], current_time: float) -> List[MemoryBlock]:
         """Apply temporal decay to memory confidence"""
@@ -649,3 +653,104 @@ class TinyRecursiveReasoningModel_ERS_PMLL(nn.Module):
                     outputs["target_q_continue"] = torch.sigmoid(torch.where(is_last_step, next_q_halt_logits, torch.maximum(next_q_halt_logits, next_q_continue_logits)))
 
         return TRM_ERS_PMLL_Carry(new_inner_carry, new_steps, halted, new_current_data), outputs
+    
+    def save_memory_state(self, carry: TRM_ERS_PMLL_Carry, filepath: str):
+        """Save persistent memory state to disk"""
+        import json
+        
+        state = {
+            'memory_blocks': [],
+            'deferred_queue': [],
+            'lattice_state': None,
+            'config': {
+                'ers_enabled': self.config.ers_enabled,
+                'pmll_enabled': self.config.pmll_enabled,
+                'topic_integrator_enabled': self.config.topic_integrator_enabled,
+            }
+        }
+        
+        # Save memory blocks
+        for block in carry.inner_carry.memory_blocks:
+            block_data = {
+                'content': block.content.cpu().tolist() if block.content is not None else None,
+                'confidence': block.confidence,
+                'timestamp': block.timestamp,
+                'hash_id': block.hash_id,
+                'metadata': block.metadata
+            }
+            state['memory_blocks'].append(block_data)
+        
+        # Save deferred queue
+        for block, score in carry.inner_carry.deferred_queue:
+            queue_item = {
+                'content': block.content.cpu().tolist() if block.content is not None else None,
+                'confidence': block.confidence,
+                'timestamp': block.timestamp,
+                'hash_id': block.hash_id,
+                'metadata': block.metadata,
+                'score': score
+            }
+            state['deferred_queue'].append(queue_item)
+        
+        # Save lattice state
+        if carry.inner_carry.lattice_state is not None:
+            state['lattice_state'] = {
+                'routing_weights': carry.inner_carry.lattice_state.routing_weights.cpu().tolist(),
+                'commitment_scores': carry.inner_carry.lattice_state.commitment_scores.cpu().tolist(),
+                'last_update': carry.inner_carry.lattice_state.last_update
+            }
+        
+        # Write to file
+        with open(filepath, 'w') as f:
+            json.dump(state, f, indent=2)
+    
+    def load_memory_state(self, filepath: str, device: str = 'cpu') -> TRM_ERS_PMLL_InnerCarry:
+        """Load persistent memory state from disk"""
+        import json
+        
+        with open(filepath, 'r') as f:
+            state = json.load(f)
+        
+        # Load memory blocks
+        memory_blocks = []
+        for block_data in state['memory_blocks']:
+            content = torch.tensor(block_data['content'], dtype=self.inner.forward_dtype, device=device) if block_data['content'] is not None else None
+            block = MemoryBlock(
+                content=content,
+                confidence=block_data['confidence'],
+                timestamp=block_data['timestamp'],
+                hash_id=block_data['hash_id'],
+                metadata=block_data['metadata']
+            )
+            memory_blocks.append(block)
+        
+        # Load deferred queue
+        deferred_queue = []
+        for queue_item in state['deferred_queue']:
+            content = torch.tensor(queue_item['content'], dtype=self.inner.forward_dtype, device=device) if queue_item['content'] is not None else None
+            block = MemoryBlock(
+                content=content,
+                confidence=queue_item['confidence'],
+                timestamp=queue_item['timestamp'],
+                hash_id=queue_item['hash_id'],
+                metadata=queue_item['metadata']
+            )
+            deferred_queue.append((block, queue_item['score']))
+        
+        # Load lattice state
+        lattice_state = None
+        if state['lattice_state'] is not None:
+            lattice_state = PMLLLatticeState(
+                routing_weights=torch.tensor(state['lattice_state']['routing_weights'], device=device),
+                commitment_scores=torch.tensor(state['lattice_state']['commitment_scores'], device=device),
+                last_update=state['lattice_state']['last_update']
+            )
+        
+        # Create carry with loaded state
+        batch_size = 1  # Will be updated on first forward pass
+        carry = self.inner.empty_carry(batch_size)
+        carry.memory_blocks = memory_blocks
+        carry.deferred_queue = deferred_queue
+        carry.lattice_state = lattice_state
+        
+        return carry

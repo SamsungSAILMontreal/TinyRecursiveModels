@@ -18,6 +18,16 @@ This work came to be after I learned about the recent innovative Hierarchical Re
 
 Tiny Recursion Model (TRM) recursively improves its predicted answer y with a tiny network. It starts with the embedded input question x and initial embedded answer y and latent z. For up to K improvements steps, it tries to improve its answer y. It does so by i) recursively updating n times its latent z given the question x, current answer y, and current latent z (recursive reasoning), and then ii) updating its answer y given the current answer y and current latent z. This recursive process allows the model to progressively improve its answer (potentially addressing any errors from its previous answer) in an extremely parameter-efficient manner while minimizing overfitting.
 
+### Hybrid TRM with ERS, PMLL, and Topic Integrator
+
+We also include a hybrid model that combines TRM with advanced memory management techniques from Dr. Josef Kurk Edwards' research:
+
+- **ERS (Enhanced Reconsideration System)**: Persistent memory with temporal decay, consensus strengthening, and contradiction detection
+- **PMLL (Persistent Memory Logic Loops)**: Multi-pass validation with lattice-based tensor routing
+- **Topic Integrator**: Knowledge graph integration for topic-aware reasoning
+
+This hybrid model maintains the parameter efficiency of TRM while adding stateful memory management for improved long-term consistency and handling of contradictory information. See [docs/TRM_ERS_PMLL_HYBRID.md](docs/TRM_ERS_PMLL_HYBRID.md) for details.
+
 ### Requirements
 
 Installation should take a few minutes. For the smallest experiments on Sudoku-Extreme (pretrain_mlp_t_sudoku), you need 1 GPU with enough memory. With 1 L40S (48Gb Ram), it takes around 18h to finish. In case that you run into issues due to library versions, here is the requirements with the exact versions used: [specific_requirements.txt](https://github.com/SamsungSAILMontreal/TinyRecursiveModels/blob/main/specific_requirements.txt).

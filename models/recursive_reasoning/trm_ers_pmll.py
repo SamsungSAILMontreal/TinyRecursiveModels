@@ -40,11 +40,10 @@ class MemoryBlock:
         if self.metadata is None:
             self.metadata = {}
         if self.hash_id == "" and self.content is not None:
-            # Generate hash from content using torch operations
-            content_flat = self.content.detach().cpu().flatten()
-            # Simple hash based on sum and product (deterministic)
-            hash_val = (content_flat.sum().item() * 1000 + content_flat.prod().item() * 100) % 1e16
-            self.hash_id = f"{int(hash_val):016d}"
+            # Generate deterministic hash from content string representation
+            # Convert to consistent format for hashing
+            content_str = str(self.content.detach().cpu().to(torch.float32).flatten().tolist())
+            self.hash_id = hashlib.sha256(content_str.encode()).hexdigest()[:16]
 
 
 @dataclass 

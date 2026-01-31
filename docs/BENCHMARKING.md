@@ -13,7 +13,7 @@ This is a developer harness for building and benchmarking agentic research workf
 * Compare model versions or prompt strategies on the same game set.
 * Detect regressions after code or prompt changes.
 * Generate official scorecards and replays for sharing.
-* Experimenting with multiple custom agentic architectures.
+* Experiment with multiple custom agentic architectures.
 
 ## Quickstart
 

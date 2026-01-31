@@ -135,13 +135,17 @@ def test_kaggle_submission():
                     row[f'y_{struct_idx + 1}'] = y
                     row[f'z_{struct_idx + 1}'] = z
                 
+                # Add chain and copy columns
+                row['chain'] = 'A'
+                row['copy'] = 1
+                
                 rows.append(row)
         
         submission_df = pd.DataFrame(rows)
         coord_cols = []
         for i in range(1, 6):
             coord_cols.extend([f'x_{i}', f'y_{i}', f'z_{i}'])
-        columns = ['ID', 'resname', 'resid'] + coord_cols
+        columns = ['ID', 'resname', 'resid'] + coord_cols + ['chain', 'copy']
         submission_df = submission_df[columns]
         submission_df.to_csv(submission_path, index=False)
         
@@ -152,12 +156,12 @@ def test_kaggle_submission():
         sub_df = pd.read_csv(submission_path)
         
         # Check columns
-        expected_cols = 18  # ID, resname, resid + 15 coordinates
+        expected_cols = 20  # ID, resname, resid + 15 coordinates + chain + copy
         assert len(sub_df.columns) == expected_cols, f"Expected {expected_cols} columns, got {len(sub_df.columns)}"
         print(f"   ✓ Column count: {len(sub_df.columns)}")
         
         # Check required columns
-        required_cols = ['ID', 'resname', 'resid']
+        required_cols = ['ID', 'resname', 'resid', 'chain', 'copy']
         for col in required_cols:
             assert col in sub_df.columns, f"Missing required column: {col}"
         print(f"   ✓ Required columns present")

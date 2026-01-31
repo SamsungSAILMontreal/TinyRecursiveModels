@@ -175,7 +175,7 @@ class RNAStructureModel(nn.Module):
         batch_size, seq_len = sequences.shape
         
         # Embed nucleotides
-        # Handle padding index -1 by clamping
+        # Handle padding index 4 by clamping to valid range
         sequences_clamped = torch.clamp(sequences, min=0)
         x = self.nucleotide_embedding(sequences_clamped)  # (batch, seq_len, embed_dim)
         

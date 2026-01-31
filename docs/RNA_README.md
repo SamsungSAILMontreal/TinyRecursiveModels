@@ -8,8 +8,10 @@ This is a quick reference guide for using TinyRecursiveModels for RNA 3D structu
 # Install base requirements
 pip install -r requirements.txt
 
-# Clone RNA pipeline
+# Clone RNA pipeline (specific version for reproducibility)
 git clone https://github.com/JaneliaSciComp/jrc-rna-structure-pipeline.git
+# Optionally checkout a specific version:
+# cd jrc-rna-structure-pipeline && git checkout v1.0.0 && cd ..
 ```
 
 ## Quick Start (3 Steps)

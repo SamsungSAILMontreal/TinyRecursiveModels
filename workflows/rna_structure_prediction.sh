@@ -87,8 +87,8 @@ Examples:
     $0 --sequences train_sequences.csv --labels train_labels.csv \\
        --test-sequences test_sequences.csv
 
-    # Quick prediction with existing model
-    $0 --sequences test_sequences.json --skip-setup --skip-train
+    # Quick prediction with existing model (using processed JSON data)
+    $0 --sequences data/rna-example/test_sequences.json --skip-setup --skip-train
 
     # Train only
     $0 --sequences train_sequences.csv --labels train_labels.csv --skip-predict

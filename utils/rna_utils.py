@@ -110,7 +110,8 @@ def clip_coordinates(coords: np.ndarray, min_val: float = -999.999, max_val: flo
     Clip coordinates to valid range for PDB format.
     
     Competition requirements specify that coordinates should be clipped
-    to [-999.999, 9999.999] due to legacy PDB format limitations.
+    to [-999.999, 9999.999] due to PDB format using 8 characters per coordinate
+    (including sign and decimal point), allowing maximum precision of 3 decimal places.
     
     Args:
         coords: Coordinate array

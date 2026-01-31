@@ -150,9 +150,9 @@ def predict_structures(
             
             # Store predictions
             for j, (idx, row) in enumerate(batch_df.iterrows()):
-                seq_len = len(row['sequence'])
+                seq_len = min(len(row['sequence']), max_length)
                 target_id = row['target_id']
-                sequence = row['sequence']
+                sequence = row['sequence'][:max_length]  # Truncate sequence to max_length
                 coords = pred_coords[j, :seq_len, :, :]
                 
                 predictions.append({

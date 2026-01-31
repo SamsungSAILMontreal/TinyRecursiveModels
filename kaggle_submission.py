@@ -191,6 +191,10 @@ def create_submission(predictions: List[Dict], output_file: str = 'submission.cs
                 row[f'y_{struct_idx + 1}'] = y
                 row[f'z_{struct_idx + 1}'] = z
             
+            # Add chain and copy columns for multicopy target compatibility
+            row['chain'] = 'A'  # Default single chain
+            row['copy'] = 1     # Default single copy
+            
             rows.append(row)
     
     df = pd.DataFrame(rows)
@@ -199,7 +203,7 @@ def create_submission(predictions: List[Dict], output_file: str = 'submission.cs
     coord_cols = []
     for i in range(1, 6):
         coord_cols.extend([f'x_{i}', f'y_{i}', f'z_{i}'])
-    columns = ['ID', 'resname', 'resid'] + coord_cols
+    columns = ['ID', 'resname', 'resid'] + coord_cols + ['chain', 'copy']
     df = df[columns]
     
     df.to_csv(output_file, index=False)

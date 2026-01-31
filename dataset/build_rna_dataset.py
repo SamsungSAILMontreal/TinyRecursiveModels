@@ -61,16 +61,16 @@ def encode_rna_sequence(sequence: str, max_length: int = 500) -> np.ndarray:
         
     Returns:
         Numpy array of shape (max_length,) with nucleotide encoding
-        A=0, C=1, G=2, U=3, padding=-1
+        A=0, C=1, G=2, U=3, N=4 (also used for padding)
     """
-    nucleotide_map = {'A': 0, 'C': 1, 'G': 2, 'U': 3, 'N': -1}
+    nucleotide_map = {'A': 0, 'C': 1, 'G': 2, 'U': 3, 'N': 4}
     
     # Encode sequence
-    encoded = np.array([nucleotide_map.get(n, -1) for n in sequence.upper()])
+    encoded = np.array([nucleotide_map.get(n, 4) for n in sequence.upper()])
     
     # Pad or truncate to max_length
     if len(encoded) < max_length:
-        encoded = np.pad(encoded, (0, max_length - len(encoded)), constant_values=-1)
+        encoded = np.pad(encoded, (0, max_length - len(encoded)), constant_values=4)
     else:
         encoded = encoded[:max_length]
     
@@ -140,12 +140,12 @@ def load_rna_data(
     if labels_file and os.path.exists(labels_file):
         label_df = pd.read_csv(labels_file)
         
-        # Group by target_id to get all residues for each target
-        for target_id, group in label_df.groupby('ID'):
-            # Extract target_id (before underscore) and residue number
-            base_id = '_'.join(target_id.split('_')[:-1])
-            
-            # Get coordinates for each structure
+        # Extract base target_id from ID column (format: target_id_residue_num)
+        label_df['base_target_id'] = label_df['ID'].apply(lambda x: '_'.join(x.split('_')[:-1]))
+        
+        # Group by base target_id to get all residues for each target
+        for base_id, group in label_df.groupby('base_target_id'):
+            # Get coordinates for each residue in order
             coords_list = []
             for _, residue_row in group.iterrows():
                 # Determine how many structures are present

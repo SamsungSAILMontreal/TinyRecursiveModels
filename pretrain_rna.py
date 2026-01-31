@@ -130,8 +130,8 @@ class RNAStructureModel(nn.Module):
         self.num_structures = num_structures
         self.max_length = max_length
         
-        # Nucleotide embedding
-        self.nucleotide_embedding = nn.Embedding(vocab_size + 1, embed_dim, padding_idx=-1)
+        # Nucleotide embedding (vocab_size=4 for ACGU, +1 for padding)
+        self.nucleotide_embedding = nn.Embedding(vocab_size + 1, embed_dim, padding_idx=vocab_size)
         
         # Position embedding
         self.position_embedding = nn.Embedding(max_length, embed_dim)
@@ -183,8 +183,8 @@ class RNAStructureModel(nn.Module):
         positions = torch.arange(seq_len, device=sequences.device).unsqueeze(0)
         x = x + self.position_embedding(positions)
         
-        # Create attention mask for padding
-        padding_mask = sequences == -1  # (batch, seq_len)
+        # Create attention mask for padding (padding index is vocab_size, which is 4)
+        padding_mask = sequences == self.vocab_size  # (batch, seq_len)
         
         # Recursive reasoning with multiple cycles
         for h_cycle in range(self.H_cycles):
@@ -228,8 +228,8 @@ def train_epoch(
             predictions = torch.clamp(predictions, -999.999, 9999.999)
         
         # Compute loss (MSE on coordinates)
-        # Only compute loss on non-padding positions
-        mask = (sequences != -1).unsqueeze(-1).unsqueeze(-1)  # (batch, seq_len, 1, 1)
+        # Only compute loss on non-padding positions (padding index is 4)
+        mask = (sequences != 4).unsqueeze(-1).unsqueeze(-1)  # (batch, seq_len, 1, 1)
         
         # If targets have fewer structures, repeat the last one
         if targets.shape[2] < predictions.shape[2]:
@@ -270,7 +270,7 @@ def validate(
             predictions = torch.clamp(predictions, -999.999, 9999.999)
             
             # Compute loss
-            mask = (sequences != -1).unsqueeze(-1).unsqueeze(-1)
+            mask = (sequences != 4).unsqueeze(-1).unsqueeze(-1)
             
             # Handle different number of structures
             if targets.shape[2] < predictions.shape[2]:

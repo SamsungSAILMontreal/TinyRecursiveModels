@@ -28,6 +28,17 @@ We also include a hybrid model that combines TRM with advanced memory management
 
 This hybrid model maintains the parameter efficiency of TRM while adding stateful memory management for improved long-term consistency and handling of contradictory information. See [docs/TRM_ERS_PMLL_HYBRID.md](docs/TRM_ERS_PMLL_HYBRID.md) for details.
 
+### ARC-AGI-3 Benchmarking
+
+We provide comprehensive documentation for benchmarking agents on the ARC-AGI-3 platform. The benchmarking harness allows you to:
+
+- Run repeatable agent evaluations across different models
+- Generate official scorecards and replays
+- Compare model versions and prompt strategies
+- Detect regressions after code changes
+
+See [docs/BENCHMARKING.md](docs/BENCHMARKING.md) for the complete benchmarking guide.
+
 ### Requirements
 
 Installation should take a few minutes. For the smallest experiments on Sudoku-Extreme (pretrain_mlp_t_sudoku), you need 1 GPU with enough memory. With 1 L40S (48Gb Ram), it takes around 18h to finish. In case that you run into issues due to library versions, here is the requirements with the exact versions used: [specific_requirements.txt](https://github.com/SamsungSAILMontreal/TinyRecursiveModels/blob/main/specific_requirements.txt).

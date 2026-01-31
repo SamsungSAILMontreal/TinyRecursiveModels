@@ -253,10 +253,29 @@ bash workflows/rna_structure_prediction.sh \
 
 - **Multi-conformation prediction**: Generates 5 different valid 3D structures per RNA sequence
 - **Recursive reasoning**: TRM's recursive approach captures complex RNA folding patterns
-- **Competition-ready**: Outputs in Kaggle competition format (Stanford RNA 3D Folding)
+- **Competition-ready**: Outputs in Kaggle competition format (Stanford RNA 3D Folding Part 2)
 - **Scalable**: Supports multi-GPU training for large datasets
 
-See the [RNA Integration Guide](docs/RNA_INTEGRATION.md) for detailed documentation.
+### Kaggle Competition
+
+For the [Stanford RNA 3D Folding Part 2](https://www.kaggle.com/competitions/stanford-rna-3d-folding-2) competition:
+
+```bash
+# Use the Kaggle submission notebook
+kaggle_submission_notebook.ipynb
+
+# Or run the submission script
+python kaggle_submission.py
+```
+
+See the [Kaggle Submission Guide](docs/KAGGLE_SUBMISSION.md) for detailed competition instructions.
+
+### Documentation
+
+- [RNA Integration Guide](docs/RNA_INTEGRATION.md) - Full documentation
+- [Kaggle Submission Guide](docs/KAGGLE_SUBMISSION.md) - Competition submission
+- [RNA Example](docs/RNA_EXAMPLE.md) - Step-by-step tutorial
+- [RNA Quick Reference](docs/RNA_README.md) - Quick start guide
 
 ## Reference
 

@@ -209,6 +209,55 @@ Key features:
 
 See the [ARC-AGI-3 Integration Guide](docs/ARC_AGI_3_INTEGRATION.md) for more details.
 
+## RNA 3D Structure Prediction
+
+We now support RNA 3D structure prediction using TRM! This integration leverages the [jrc-rna-structure-pipeline](https://github.com/JaneliaSciComp/jrc-rna-structure-pipeline) to predict 3D coordinates of RNA molecules.
+
+### Quick Start
+
+```bash
+# Clone and setup the RNA structure pipeline
+git clone https://github.com/JaneliaSciComp/jrc-rna-structure-pipeline.git
+
+# Prepare RNA dataset
+python dataset/build_rna_dataset.py \
+  --sequences train_sequences.csv \
+  --labels train_labels.csv \
+  --output-dir data/rna-structure
+
+# Train TRM for RNA structure prediction
+python pretrain_rna.py \
+  --data-dir data/rna-structure \
+  --epochs 100 \
+  --num-structures 5
+
+# Generate predictions (5 structures per sequence)
+python predict_rna.py \
+  --model-path checkpoints/rna/best_model.pth \
+  --sequences test_sequences.json \
+  --output submission.csv
+```
+
+### Automated Workflow
+
+Use the workflow script for end-to-end processing:
+
+```bash
+bash workflows/rna_structure_prediction.sh \
+  --sequences train_sequences.csv \
+  --labels train_labels.csv \
+  --test-sequences test_sequences.csv
+```
+
+### Key Features
+
+- **Multi-conformation prediction**: Generates 5 different valid 3D structures per RNA sequence
+- **Recursive reasoning**: TRM's recursive approach captures complex RNA folding patterns
+- **Competition-ready**: Outputs in Kaggle competition format (Stanford RNA 3D Folding)
+- **Scalable**: Supports multi-GPU training for large datasets
+
+See the [RNA Integration Guide](docs/RNA_INTEGRATION.md) for detailed documentation.
+
 ## Reference
 
 If you find our work useful, please consider citing:

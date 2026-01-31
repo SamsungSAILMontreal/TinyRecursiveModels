@@ -180,6 +180,34 @@ arch.H_cycles=3 arch.L_cycles=4 \
 
 *Runtime:* ~3 days
 
+## ARC-AGI-3 Agent Integration
+
+We now support running TRM as an agent on the ARC-AGI-3 platform! This allows you to use recursive reasoning to play ARC-AGI-3 games.
+
+### Quick Start
+
+```bash
+# Run the TRM agent experiment
+python experiments/run_trm_arc_agi_3.py --game=ls20
+
+# Run tests
+python tests/test_trm_agent.py
+
+# Run with main.py
+python main.py --agent=trmagent --game=ls20
+```
+
+### Full Integration
+
+For complete integration with the official ARC-AGI-3 API, follow the detailed guide in [docs/ARC_AGI_3_INTEGRATION.md](docs/ARC_AGI_3_INTEGRATION.md).
+
+Key features:
+- TRM agent compatible with ARC-AGI-3 framework
+- Configurable recursive reasoning cycles
+- Support for both local simulation and full API integration
+- Comprehensive test suite
+
+See the [ARC-AGI-3 Integration Guide](docs/ARC_AGI_3_INTEGRATION.md) for more details.
 
 ## Reference
 

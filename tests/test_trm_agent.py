@@ -27,7 +27,7 @@ def test_trm_agent_is_done_win():
     frames = []
     win_frame = FrameData(state=GameState.WIN)
     
-    assert agent.is_done(frames, win_frame) == True
+    assert agent.is_done(frames, win_frame)
     print("✓ TRM agent win detection test passed")
 
 
@@ -37,7 +37,7 @@ def test_trm_agent_is_done_max_steps():
     frames = [FrameData(state=GameState.PLAYING) for _ in range(5)]
     current_frame = FrameData(state=GameState.PLAYING)
     
-    assert agent.is_done(frames, current_frame) == True
+    assert agent.is_done(frames, current_frame)
     print("✓ TRM agent max steps test passed")
 
 
@@ -47,7 +47,7 @@ def test_trm_agent_is_done_game_over():
     frames = []
     game_over_frame = FrameData(state=GameState.GAME_OVER)
     
-    assert agent.is_done(frames, game_over_frame) == True
+    assert agent.is_done(frames, game_over_frame)
     print("✓ TRM agent game over detection test passed")
 
 
@@ -81,7 +81,7 @@ def test_trm_agent_choose_action_playing():
         GameAction.REMOVE,
     ]
     assert action in valid_actions
-    assert agent.model_loaded == True  # Model should be loaded after first action
+    assert agent.model_loaded  # Model should be loaded after first action
     print("✓ TRM agent action selection test passed")
 
 

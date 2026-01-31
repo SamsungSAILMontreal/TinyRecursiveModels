@@ -137,7 +137,8 @@ class TRMAgent(Agent):
             action.reasoning = f"TRM recursive reasoning (cycle {self.recursion_cycles}): {action.value}"
         elif action.is_complex():
             # For complex actions, we'd need to determine coordinates
-            # This is a placeholder
+            # Using 0-63 range as standard ARC-AGI grid size (64x64 max)
+            # In production, this should be derived from actual grid dimensions
             action.set_data({
                 "x": random.randint(0, 63),
                 "y": random.randint(0, 63),

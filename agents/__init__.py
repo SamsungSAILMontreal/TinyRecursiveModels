@@ -4,12 +4,14 @@ from .agent import Agent
 from .structs import FrameData, GameAction, GameState
 from .templates.random_agent import RandomAgent
 from .my_awesome_agent import MyAwesomeAgent
+from .trm_agent import TRMAgent
 
 # Dictionary mapping agent names to agent classes
 # Add your custom agents here
 AVAILABLE_AGENTS = {
     "randomagent": RandomAgent,
     "myawesomeagent": MyAwesomeAgent,
+    "trmagent": TRMAgent,
 }
 
 __all__ = [
@@ -19,5 +21,6 @@ __all__ = [
     "GameState",
     "RandomAgent",
     "MyAwesomeAgent",
+    "TRMAgent",
     "AVAILABLE_AGENTS",
 ]

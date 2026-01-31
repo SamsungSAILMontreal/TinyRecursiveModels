@@ -293,6 +293,18 @@ If you find our work useful, please consider citing:
 }
 ```
 
+```bibtex 
+@misc{josef_edwards_alexiajm_2026,
+	title={Rtmtrm},
+	url={https://www.kaggle.com/dsv/14685757},
+	DOI={10.34740/KAGGLE/DSV/14685757},
+	publisher={Kaggle},
+	author={Josef Edwards and AlexiaJM},
+	year={2026}
+}
+```
+
+
 and the Hierarchical Reasoning Model (HRM):
 
 ```bibtex

@@ -1,0 +1,32 @@
+name: recursive_reasoning.trm_deq_h@TRMDEQ
+
+loss:
+  name: losses@ACTLossHead
+  loss_type: stablemax_cross_entropy
+
+halt_exploration_prob: 0.1
+halt_max_steps: 16
+no_ACT_continue: true
+
+H_cycles: 3
+L_cycles: 6
+H_layers: 0
+L_layers: 2
+
+hidden_size: 512
+num_heads: 8
+expansion: 4
+
+puzzle_emb_ndim: 512
+puzzle_emb_len: 16
+pos_encodings: rope
+forward_dtype: bfloat16
+mlp_t: false
+
+# DEQ solver
+deq_solver_type: reversible
+deq_tol: 1e-3
+deq_max_steps: 50
+deq_use_ift: true
+deq_backward_tol: 1e-4
+deq_backward_max_steps: 100

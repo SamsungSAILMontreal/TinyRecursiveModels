@@ -21,3 +21,4 @@ triton
 pandas
 numpy
 biopython
+mcp

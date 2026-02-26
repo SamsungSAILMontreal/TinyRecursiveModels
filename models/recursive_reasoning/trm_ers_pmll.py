@@ -23,6 +23,7 @@ import time
 from models.common import trunc_normal_init_
 from models.layers import rms_norm, LinearSwish, SwiGLU, Attention, RotaryEmbedding, CosSin, CastedEmbedding, CastedLinear
 from models.sparse_embedding import CastedSparseEmbedding
+from models.flo_json_output_collector import FloJsonOutputCollector
 
 IGNORE_LABEL_ID = -100
 
@@ -65,6 +66,8 @@ class TRM_ERS_PMLL_InnerCarry:
     lattice_state: Optional[PMLLLatticeState]
     # Deferred reconsideration queue
     deferred_queue: List[Tuple[MemoryBlock, float]]
+    # Flo Q-promise output collector for agent/LLM output replay
+    output_collector: Optional[FloJsonOutputCollector] = None
 
 
 @dataclass
@@ -509,7 +512,8 @@ class TRM_ERS_PMLL_Inner(nn.Module):
             z_L=torch.empty(batch_size, self.config.seq_len + self.puzzle_emb_len, self.config.hidden_size, dtype=self.forward_dtype),
             memory_blocks=[],
             lattice_state=None,
-            deferred_queue=[]
+            deferred_queue=[],
+            output_collector=FloJsonOutputCollector()
         )
         
     def reset_carry(self, reset_flag: torch.Tensor, carry: TRM_ERS_PMLL_InnerCarry):
@@ -519,7 +523,8 @@ class TRM_ERS_PMLL_Inner(nn.Module):
             z_L=torch.where(reset_flag.view(-1, 1, 1), self.L_init, carry.z_L),
             memory_blocks=[] if reset_flag.any() else carry.memory_blocks,
             lattice_state=None if reset_flag.any() else carry.lattice_state,
-            deferred_queue=[] if reset_flag.any() else carry.deferred_queue
+            deferred_queue=[] if reset_flag.any() else carry.deferred_queue,
+            output_collector=FloJsonOutputCollector() if reset_flag.any() else carry.output_collector
         )
 
     def forward(self, carry: TRM_ERS_PMLL_InnerCarry, batch: Dict[str, torch.Tensor]) -> Tuple[TRM_ERS_PMLL_InnerCarry, torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
@@ -580,7 +585,8 @@ class TRM_ERS_PMLL_Inner(nn.Module):
             z_L=z_L.detach(),
             memory_blocks=carry.memory_blocks,
             lattice_state=carry.lattice_state,
-            deferred_queue=carry.deferred_queue
+            deferred_queue=carry.deferred_queue,
+            output_collector=carry.output_collector
         )
         
         output = self.lm_head(z_H)[:, self.puzzle_emb_len:]
@@ -661,6 +667,7 @@ class TinyRecursiveReasoningModel_ERS_PMLL(nn.Module):
             'memory_blocks': [],
             'deferred_queue': [],
             'lattice_state': None,
+            'output_collector': [],
             'config': {
                 'ers_enabled': self.config.ers_enabled,
                 'pmll_enabled': self.config.pmll_enabled,
@@ -698,6 +705,10 @@ class TinyRecursiveReasoningModel_ERS_PMLL(nn.Module):
                 'commitment_scores': carry.inner_carry.lattice_state.commitment_scores.cpu().tolist(),
                 'last_update': carry.inner_carry.lattice_state.last_update
             }
+
+        # Save output collector data
+        if carry.inner_carry.output_collector is not None:
+            state['output_collector'] = carry.inner_carry.output_collector.data
         
         # Write to file
         with open(filepath, 'w') as f:
@@ -744,6 +755,11 @@ class TinyRecursiveReasoningModel_ERS_PMLL(nn.Module):
                 commitment_scores=torch.tensor(state['lattice_state']['commitment_scores'], device=device),
                 last_update=state['lattice_state']['last_update']
             )
+
+        # Load output collector data
+        output_collector = FloJsonOutputCollector()
+        for entry in state.get('output_collector', []):
+            output_collector.data.append(entry)
         
         # Create carry with loaded state
         batch_size = 1  # Will be updated on first forward pass
@@ -751,5 +767,6 @@ class TinyRecursiveReasoningModel_ERS_PMLL(nn.Module):
         carry.memory_blocks = memory_blocks
         carry.deferred_queue = deferred_queue
         carry.lattice_state = lattice_state
+        carry.output_collector = output_collector
         
         return carry

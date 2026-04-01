@@ -1,0 +1,151 @@
+#include <iostream>
+#include <limits>  // Untuk clear input
+using namespace std;
+
+// ===== FUNGSI KONVERSI PANJANG =====
+float meterToKilometer(float m) { return m / 1000.0; }
+float kilometerToMeter(float km) { return km * 1000.0; }
+float meterToCentimeter(float m) { return m * 100.0; }
+float centimeterToMeter(float cm) { return cm / 100.0; }
+
+// ===== FUNGSI KONVERSI SUHU =====
+float celsiusToFahrenheit(float c) { return (c * 9.0 / 5.0) + 32.0; }
+float fahrenheitToCelsius(float f) { return (f - 32.0) * 5.0 / 9.0; }
+float celsiusToKelvin(float c) { return c + 273.15; }
+float kelvinToCelsius(float k) { return k - 273.15; }
+
+// ===== FUNGSI KONVERSI BERAT =====
+float kilogramToGram(float kg) { return kg * 1000.0; }
+float gramToKilogram(float g) { return g / 1000.0; }
+float kilogramToPound(float kg) { return kg * 2.20462; }
+float poundToKilogram(float lb) { return lb / 2.20462; }
+
+// ===== MENU PANJANG =====
+void menuKonversiPanjang() {
+    int pilihan;
+    float input;
+
+    cout << "\n📏 === Konversi Panjang ===\n";
+    cout << "1. Meter ke Kilometer\n";
+    cout << "2. Kilometer ke Meter\n";
+    cout << "3. Meter ke Centimeter\n";
+    cout << "4. Centimeter ke Meter\n";
+    cout << "🔢 Pilih: ";
+    cin >> pilihan;
+
+    cout << "💡 Masukkan nilai: ";
+    cin >> input;
+
+    switch (pilihan) {
+        case 1: cout << input << " meter = " << meterToKilometer(input) << " kilometer\n"; break;
+        case 2: cout << input << " kilometer = " << kilometerToMeter(input) << " meter\n"; break;
+        case 3: cout << input << " meter = " << meterToCentimeter(input) << " centimeter\n"; break;
+        case 4: cout << input << " centimeter = " << centimeterToMeter(input) << " meter\n"; break;
+        default: cout << "❌ Pilihan tidak valid.\n";
+    }
+}
+
+// ===== MENU SUHU =====
+void menuKonversiSuhu() {
+    int pilihan;
+    float input;
+
+    cout << "\n🌡️ === Konversi Suhu ===\n";
+    cout << "1. Celsius ke Fahrenheit\n";
+    cout << "2. Fahrenheit ke Celsius\n";
+    cout << "3. Celsius ke Kelvin\n";
+    cout << "4. Kelvin ke Celsius\n";
+    cout << "🔢 Pilih: ";
+    cin >> pilihan;
+
+    cout << "💡 Masukkan suhu: ";
+    cin >> input;
+
+    switch (pilihan) {
+        case 1: cout << input << " °C = " << celsiusToFahrenheit(input) << " °F\n"; break;
+        case 2: cout << input << " °F = " << fahrenheitToCelsius(input) << " °C\n"; break;
+        case 3: cout << input << " °C = " << celsiusToKelvin(input) << " K\n"; break;
+        case 4: cout << input << " K = " << kelvinToCelsius(input) << " °C\n"; break;
+        default: cout << "❌ Pilihan tidak valid.\n";
+    }
+}
+
+// ===== MENU BERAT =====
+void menuKonversiBerat() {
+    int pilihan;
+    float input;
+
+    cout << "\n⚖️ === Konversi Berat ===\n";
+    cout << "1. Kilogram ke Gram\n";
+    cout << "2. Gram ke Kilogram\n";
+    cout << "3. Kilogram ke Pound (Pon)\n";
+    cout << "4. Pound ke Kilogram\n";
+    cout << "🔢 Pilih: ";
+    cin >> pilihan;
+
+    cout << "💡 Masukkan berat: ";
+    cin >> input;
+
+    switch (pilihan) {
+        case 1: cout << input << " kg = " << kilogramToGram(input) << " gram\n"; break;
+        case 2: cout << input << " gram = " << gramToKilogram(input) << " kg\n"; break;
+        case 3: cout << input << " kg = " << kilogramToPound(input) << " pound\n"; break;
+        case 4: cout << input << " pound = " << poundToKilogram(input) << " kg\n"; break;
+        default: cout << "❌ Pilihan tidak valid.\n";
+    }
+}
+
+// ===== MENU UTAMA =====
+void menuUtama() {
+    int pilihan;
+
+    do {
+        cout << "\n==============================\n";
+        cout << "🛠️  Aplikasi Konversi Satuan  🛠️\n";
+        cout << "==============================\n";
+        cout << "1. Konversi Panjang 📏\n";
+        cout << "2. Konversi Suhu 🌡️\n";
+        cout << "3. Konversi Berat ⚖️\n";
+        cout << "4. Keluar 🚪\n";
+        cout << "🔢 Pilih menu: ";
+        cin >> pilihan;
+
+        switch (pilihan) {
+            case 1: menuKonversiPanjang(); break;
+            case 2: menuKonversiSuhu(); break;
+            case 3: menuKonversiBerat(); break;
+            case 4: cout << "👋 Terima kasih telah menggunakan aplikasi konversi!\n"; break;
+            default: cout << "❌ Pilihan tidak valid. Silakan coba lagi.\n";
+        }
+    } while (pilihan != 4);
+}
+
+// ===== PROGRAM UTAMA =====
+int main() {
+    char masuk;
+
+    do {
+        cout << "=====================================\n";
+        cout << "📲 Selamat datang di Aplikasi Konversi Satuan\n";
+        cout << "=====================================\n";
+        cout << "Apakah Anda ingin masuk ke aplikasi? (y/n): ";
+        cin >> masuk;
+
+        // Clear input jika salah
+        if (cin.fail()) {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            masuk = 'n';
+        }
+
+        if (masuk == 'y' || masuk == 'Y') {
+            system("cls"); // Untuk Windows, atau ganti dengan system("clear"); di Linux/Mac
+            menuUtama();
+        } else if (masuk != 'n' && masuk != 'N') {
+            cout << "❗ Masukan tidak valid. Ketik 'y' atau 'n'.\n";
+        }
+
+    } while (masuk != 'y' && masuk != 'Y');
+
+    return 0;
+}

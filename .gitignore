@@ -1,0 +1,34 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data and checkpoints
+*.pth
+*.ckpt
+checkpoints/
+wandb/
+outputs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# External repositories
+jrc-rna-structure-pipeline/

@@ -21,6 +21,27 @@ This work came to be after I learned about the recent innovative Hierarchical Re
 
 Tiny Recursion Model (TRM) recursively improves its predicted answer y with a tiny network. It starts with the embedded input question x and initial embedded answer y and latent z. For up to K improvements steps, it tries to improve its answer y. It does so by i) recursively updating n times its latent z given the question x, current answer y, and current latent z (recursive reasoning), and then ii) updating its answer y given the current answer y and current latent z. This recursive process allows the model to progressively improve its answer (potentially addressing any errors from its previous answer) in an extremely parameter-efficient manner while minimizing overfitting.
 
+### Hybrid TRM with ERS, PMLL, and Topic Integrator
+
+We also include a hybrid model that combines TRM with advanced memory management techniques from Dr. Josef Kurk Edwards' research:
+
+- **ERS (Enhanced Reconsideration System)**: Persistent memory with temporal decay, consensus strengthening, and contradiction detection
+- **PMLL (Persistent Memory Logic Loops)**: Multi-pass validation with lattice-based tensor routing
+- **Topic Integrator**: Knowledge graph integration for topic-aware reasoning
+
+This hybrid model maintains the parameter efficiency of TRM while adding stateful memory management for improved long-term consistency and handling of contradictory information. See [docs/TRM_ERS_PMLL_HYBRID.md](docs/TRM_ERS_PMLL_HYBRID.md) for details.
+
+### ARC-AGI-3 Benchmarking
+
+We provide comprehensive documentation for benchmarking agents on the ARC-AGI-3 platform. The benchmarking harness allows you to:
+
+- Run repeatable agent evaluations across different models
+- Generate official scorecards and replays
+- Compare model versions and prompt strategies
+- Detect regressions after code changes
+
+See [docs/BENCHMARKING.md](docs/BENCHMARKING.md) for the complete benchmarking guide.
+
 ### Requirements
 
 Installation should take a few minutes. For the smallest experiments on Sudoku-Extreme (pretrain_mlp_t_sudoku), you need 1 GPU with enough memory. With 1 L40S (48Gb Ram), it takes around 18h to finish. In case that you run into issues due to library versions, here is the requirements with the exact versions used: [specific_requirements.txt](https://github.com/SamsungSAILMontreal/TinyRecursiveModels/blob/main/specific_requirements.txt).
@@ -162,6 +183,34 @@ arch.H_cycles=3 arch.L_cycles=4 \
 
 *Runtime:* ~3 days
 
+## ARC-AGI-3 Agent Integration
+
+We now support running TRM as an agent on the ARC-AGI-3 platform! This allows you to use recursive reasoning to play ARC-AGI-3 games.
+
+### Quick Start
+
+```bash
+# Run the TRM agent experiment
+python experiments/run_trm_arc_agi_3.py --game=ls20
+
+# Run tests
+python tests/test_trm_agent.py
+
+# Run with main.py
+python main.py --agent=trmagent --game=ls20
+```
+
+### Full Integration
+
+For complete integration with the official ARC-AGI-3 API, follow the detailed guide in [docs/ARC_AGI_3_INTEGRATION.md](docs/ARC_AGI_3_INTEGRATION.md).
+
+Key features:
+- TRM agent compatible with ARC-AGI-3 framework
+- Configurable recursive reasoning cycles
+- Support for both local simulation and full API integration
+- Comprehensive test suite
+
+See the [ARC-AGI-3 Integration Guide](docs/ARC_AGI_3_INTEGRATION.md) for more details.
 
 ## Reference
 
@@ -178,6 +227,18 @@ If you find our work useful, please consider citing:
       url={https://arxiv.org/abs/2510.04871}, 
 }
 ```
+
+```bibtex 
+@misc{josef_edwards_alexiajm_2026,
+	title={Rtmtrm},
+	url={https://www.kaggle.com/dsv/14685757},
+	DOI={10.34740/KAGGLE/DSV/14685757},
+	publisher={Kaggle},
+	author={Josef Edwards and AlexiaJM},
+	year={2026}
+}
+```
+
 
 and the Hierarchical Reasoning Model (HRM):
 
